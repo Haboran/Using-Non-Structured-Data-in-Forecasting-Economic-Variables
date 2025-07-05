@@ -232,17 +232,26 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
     rmse_rf = np.sqrt(mean_squared_error(acts_rf, preds_rf))
 
 
-    # === MIDAS-Net (MLP) ===
-    # reuse X_mid_vals, y_mid_vals
-    X_mlp = StandardScaler().fit_transform(X_mid_vals)
-    preds_mlp, acts_mlp, dates_mlp = [], [], []
-    train_end_mlp = train_end_mid
-    for i in range(train_end_mlp, len(y_mid_vals) - H + 1):
-        mlp = MLPRegressor(hidden_layer_sizes=(50,10), max_iter=500, random_state=0)
-        mlp.fit(X_mlp[:i], y_mid_vals[:i])
-        preds_mlp.append(mlp.predict(X_mlp[i+H-1].reshape(1,-1))[0])
-        acts_mlp.append(y_mid_vals[i+H-1]); dates_mlp.append(valid_mid[i+H-1])
-    rmse_mlp = np.sqrt(mean_squared_error(acts_mlp, preds_mlp))
+    # # === MIDAS-Net (MLP) ===
+    # X_mlp = StandardScaler().fit_transform(X_mid_vals)
+    # preds_mlp, acts_mlp, dates_mlp = [], [], []
+    # train_end_mlp = train_end_mid
+    
+    # for i in range(train_end_mlp, len(y_mid_vals) - H + 1):
+    #     mlp = MLPRegressor(
+    #         hidden_layer_sizes=(5,2),
+    #         alpha=0.1,
+    #         early_stopping=True,
+    #         n_iter_no_change=20,
+    #         max_iter=500,
+    #         random_state=0
+    #     )
+    #     mlp.fit(X_mlp[:i], y_mid_vals[:i])
+    #     preds_mlp.append(mlp.predict(X_mlp[i+H-1].reshape(1,-1))[0])
+    #     acts_mlp.append(y_mid_vals[i+H-1])
+    #     dates_mlp.append(valid_mid[i+H-1])
+
+    # rmse_mlp = np.sqrt(mean_squared_error(acts_mlp, preds_mlp))
     
     
     # === r-MIDAS with AR lags (direct H-step) ===
@@ -290,7 +299,7 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
         "U-MIDAS":    np.array(preds_mid),
         "LASSO":      np.array(preds_lasso),
         "RF":         np.array(preds_rf),
-        "MIDAS-Net":  np.array(preds_mlp),
+    #    "MIDAS-Net":  np.array(preds_mlp),
         "r-MIDAS":    np.array(preds_r)
     }
     acts = np.array(acts_arima)  # use ARIMA acts as reference
@@ -317,7 +326,7 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
         "U-MIDAS": rmse_midas,
         "LASSO": rmse_lasso,
         "RF": rmse_rf,
-        "MIDAS-Net": rmse_mlp,
+      #  "MIDAS-Net": rmse_mlp,
         "r-MIDAS": rmse_r_midas
     }
     wtd_rmse = {}
@@ -329,6 +338,26 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
         wpred = (weights[:, None] * stack).sum(axis=0)
         wtd_preds[name] = wpred
         wtd_rmse[name] = np.sqrt(mean_squared_error(acts, wpred))
+    
+    # Rolling RMSE plot
+    model_outputs = {
+        f"ARIMA H={H}": (acts_arima, preds_arima, eval_dates_arima),
+        f"ARIMAX H={H}": (acts_arimax, preds_arimax, eval_dates_arimax),
+   #     f"U-MIDAS H={H}": (acts_mid, preds_mid, eval_dates_mid),
+        f"LASSO H={H}": (acts_lasso, preds_lasso, eval_dates_lasso),
+        f"RF H={H}":(acts_rf,preds_rf,dates_rf),
+   #     f"MIDAS-Net H={H}":(acts_mlp,preds_mlp,dates_mlp),
+        f"r-MIDAS H={H}": (acts_r, preds_r, eval_dates_r)
+    }
+    
+    # Rolling RMSE for combined models
+    combo_outputs = {}
+    for name in comb_preds:
+        combo_outputs[name + ' (unw)'] = (acts, comb_preds[name], eval_dates_arima)
+    for name in wtd_preds:
+        combo_outputs[name + ' (wtd)'] = (acts, wtd_preds[name], eval_dates_arima)
+        
+        
     # Plotting
     if plot:
         import matplotlib.pyplot as plt
@@ -336,10 +365,10 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
         plt.plot(eval_dates_arima, acts_arima, '-', color='black', linewidth=1.5, label='Actual')
         plt.plot(eval_dates_arima, preds_arima, '--', label='ARIMA')
         plt.plot(eval_dates_arimax, preds_arimax, '-.', label='ARIMAX')
-        plt.plot(eval_dates_mid, preds_mid, ':', label=f'U-MIDAS H={H}')
+        # plt.plot(eval_dates_mid, preds_mid, ':', label=f'U-MIDAS H={H}')
         plt.plot(eval_dates_lasso, preds_lasso, ':', label=f'LASSO H={H}')
         plt.plot(dates_rf,preds_rf,'-x',label=f'RF H={H}')
-        plt.plot(dates_mlp,preds_mlp,'-o',label=f'MIDAS-Net H={H}')
+       # plt.plot(dates_mlp,preds_mlp,'-o',label=f'MIDAS-Net H={H}')
         plt.plot(eval_dates_r, preds_r, '--', label=f'r-MIDAS H={H}')
         plt.title(f"Forecast Comparison H={H} - {country_code}")
         plt.xlabel("Date")
@@ -367,24 +396,10 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
         plt.tight_layout()
         plt.show()
         
-        # Rolling RMSE plot
-        model_outputs = {
-            f"ARIMA H={H}": (acts_arima, preds_arima, eval_dates_arima),
-            f"ARIMAX H={H}": (acts_arimax, preds_arimax, eval_dates_arimax),
-            f"U-MIDAS H={H}": (acts_mid, preds_mid, eval_dates_mid),
-            f"LASSO H={H}": (acts_lasso, preds_lasso, eval_dates_lasso),
-            f"RF H={H}":(acts_rf,preds_rf,dates_rf),
-            f"MIDAS-Net H={H}":(acts_mlp,preds_mlp,dates_mlp),
-            f"r-MIDAS H={H}": (acts_r, preds_r, eval_dates_r)
-        }
+        
         rolling_rmse_plot(model_outputs, eval_dates_arima, title=f"Rolling RMSE H={H} — {country_code}")
         
-        # Rolling RMSE for combined models
-        combo_outputs = {}
-        for name in comb_preds:
-            combo_outputs[name + ' (unw)'] = (acts, comb_preds[name], eval_dates_arima)
-        for name in wtd_preds:
-            combo_outputs[name + ' (wtd)'] = (acts, wtd_preds[name], eval_dates_arima)
+        
         rolling_rmse_plot(combo_outputs, eval_dates_arima, title=f"Rolling RMSE Combined H={H} — {country_code}")
         
         
@@ -395,13 +410,18 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
         rolling_rmse_heatmap(model_outputs, window=4, 
                         title=f'Rolling 4-Quarter RMSE Heatmap H={H}')
         
+    summary_rmse = {
+        "ARIMA":    rmse_arima,
+        "ARIMAX":   rmse_arimax,
+        "U-MIDAS":  rmse_midas,
+        "LASSO":    rmse_lasso,
+        "RF":       rmse_rf,
+        "r-MIDAS":  rmse_r_midas
+    }
+
     return {
-        "ARIMA":rmse_arima,
-        "ARIMAX":rmse_arimax,
-        "U-MIDAS":rmse_midas,
-        "LASSO":rmse_lasso,
-        "RF":rmse_rf,
-        "MIDAS-Net":rmse_mlp,
-        "r-MIDAS":rmse_r_midas
+        "summary_rmse":     summary_rmse,
+        "raw_outputs":      model_outputs,
+        "combo_outputs":    combo_outputs
     }
 

@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from pmdarima import auto_arima
 from sklearn.metrics import mean_squared_error
 import numpy as np
-# from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.stattools import adfuller, kpss
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 import warnings
@@ -25,7 +25,7 @@ from sklearn.preprocessing import StandardScaler
 # from functools import reduce
 from sklearn.linear_model import LinearRegression
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
-from pandas.tseries.offsets import QuarterEnd
+from pandas.tseries.offsets import MonthEnd, QuarterEnd
 # from pyMIDAS.regression import MIDASRegression
 from sklearn.linear_model import LassoCV
 from scipy.optimize import minimize
@@ -38,7 +38,10 @@ from sklearn.neural_network import MLPRegressor
 #%%
 from forecast_with_sentiment_models_quarterly_daily import forecast_with_sentiment_models_qd
 from forecast_with_sentiment_models_quarterly_monthly import forecast_with_sentiment_models_qm
+from forecast_with_sentiment_models_monthly_daily import forecast_with_sentiment_models_md
+from forecast_with_sentiment_models_monthly_monthly import forecast_with_sentiment_models_mm
 from Functions import get_top_2_sentiments
+from Functions import plot_country_rolling_rmse
 
 #%%
 # Utility function for transforming time series data
@@ -64,7 +67,14 @@ def transform_series(series, method='log_diff'):
 
 
 
-#%% Load GDP data from CSV
+#%% 
+
+
+'''     Target macro variables     '''
+
+
+'''     GDP - quarterly     '''
+#Load GDP data from CSV
 warnings.filterwarnings("ignore", message="Non-invertible starting MA parameters found.*")
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -73,12 +83,141 @@ warnings.filterwarnings("ignore", category=UserWarning)
 df = pd.read_csv(r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\estat_namq_10_gdp_filtered_en (4).csv")
 df['TIME_PERIOD'] = pd.to_datetime(df['TIME_PERIOD'])  # Convert to datetime
 
-#%% Load sentiment data
+
+#%% Filter GDP data to relevant entries
+# First: focus on GDP at market prices
+gdp_df = df[df['na_item'] == 'Gross domestic product at market prices']
+
+# Further restrict to seasonally and calendar adjusted data
+gdp_df = gdp_df[gdp_df['s_adj'] == 'Seasonally and calendar adjusted data']
+
+# Remove duplicates and average values if multiple entries exist
+gdp_df = gdp_df.groupby(['TIME_PERIOD', 'geo'])['OBS_VALUE'].mean().reset_index()
+
+# Ensure datetime format for merging later
+gdp_df['TIME_PERIOD'] = pd.to_datetime(gdp_df['TIME_PERIOD'])
+
+# Pivot to wide format: one column per country
+gdp_data = gdp_df.pivot(index='TIME_PERIOD', columns='geo', values='OBS_VALUE')
+
+#%%
+# First: focus on GDP at market prices
+wage_df = df[df['na_item'] == 'Wages and salaries']
+
+# Further restrict to seasonally and calendar adjusted data
+wage_df = wage_df[wage_df['s_adj'] == 'Unadjusted data (i.e. neither seasonally adjusted nor calendar adjusted data)']
+
+# Remove duplicates and average values if multiple entries exist
+wage_df = wage_df.groupby(['TIME_PERIOD', 'geo'])['OBS_VALUE'].mean().reset_index()
+
+# Ensure datetime format for merging later
+wage_df['TIME_PERIOD'] = pd.to_datetime(wage_df['TIME_PERIOD'])
+
+# Pivot to wide format: one column per country
+wage_data = wage_df.pivot(index='TIME_PERIOD', columns='geo', values='OBS_VALUE')
+
+#%% Drop unwanted Euro area aggregate columns if present
+euro_areas_to_exclude = [
+    'Euro area - 19 countries (2015-2022)',
+    'Euro area - 19 countries  (2015-2022)',
+    'Euro area – 20 countries (from 2023)',  # UTF-8 dash
+    'Euro area â€“ 20 countries (from 2023)',  # Incorrect encoding
+]
+
+gdp_data = gdp_data.drop(columns=[col for col in euro_areas_to_exclude if col in gdp_data.columns], errors='ignore')
+wage_data = wage_data.drop(columns=[col for col in euro_areas_to_exclude if col in wage_data.columns], errors='ignore')
+# external_balance_data = gdp_data.drop(columns=[col for col in euro_areas_to_exclude if col in external_balance_data.columns], errors='ignore')
+
+# Limit data to post-1995 only
+gdp_data = gdp_data[gdp_data.index >= pd.to_datetime("1995-04-01")]
+gdp_data = gdp_data[gdp_data.index <= pd.to_datetime("2024-10-01")]
+wage_data = wage_data[wage_data.index >= pd.to_datetime("1995-04-01")]
+wage_data = wage_data[wage_data.index <= pd.to_datetime("2024-10-01")]
+gdp_data = gdp_data[gdp_data.index >= pd.to_datetime("1995-04-01")]
+gdp_data = gdp_data[gdp_data.index <= pd.to_datetime("2024-10-01")]
+
+
+#%% 
+
+'''    Inflation - monthly '''
+
+# 1. Point to your file
+file_path = r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Data\prc_hicp_manr__custom_16484139_spreadsheet.xlsx"
+
+# 2. Read the “Data” sheet, using row 9 (0-based index 8) as the header row, and first column as the country label
+df_inf = pd.read_excel(
+    file_path,
+    sheet_name='Data',   # or sheet_name=2
+    header=8,            # header is on the 9th row
+    index_col=0          # first column has the country names
+)
+
+# 3. Drop every column whose header is NaN (those were the blank interleaved columns)
+df_inf = df_inf.loc[:, df_inf.columns.notna()]
+
+# 4. Transpose so that dates run down the rows and countries across the columns
+df_inf = df_inf.T
+
+# 5. Parse the index as monthly; coerce “Unnamed” → NaT
+df_inf.index = pd.to_datetime(df_inf.index, format='%Y-%m', errors='coerce')
+
+# 6. Drop all rows whose index is NaT (these were the blank “Unnamed” rows)
+df_inf = df_inf.loc[df_inf.index.notna()]
+
+# 7. Shift the now-clean index to month-ends
+df_inf.index = df_inf.index.to_period('M').to_timestamp('M')
+
+# Keep only the first occurrence of each column name
+df_inf = df_inf.loc[:, ~df_inf.columns.duplicated()]
+
+# 8. Select only the four countries you need
+df_inf = df_inf.loc[:, ["Germany", "Spain", "France", "Italy"]]
+
+# 9. (Optional) Inspect
+df_inf = transform_series(df_inf, method='diff')
+
+# for col in df_inf.columns:
+#     # Example: use your Germany inflation series
+#     y = df_inf[col].dropna()
+
+#     # 1) Run ADF with no automatic lag selection if you want to fix your lag length
+#     #    (you can also use autolag='AIC' or 'BIC' if you prefer)
+#     result = adfuller(y, maxlag=12, regression='c', autolag=None)
+
+#     adf_stat   = result[0]
+#     n_lags     = result[2]
+#     n_obs      = result[3]
+#     crit_vals  = result[4]    # dict: { '1%': val1, '5%': val5, '10%': val10 }
+
+#     print(f"ADF statistic: {adf_stat:.3f}")
+#     print(f"Number of lags used: {n_lags}")
+#     print(f"Number of observations: {n_obs}")
+#     print("Critical values:")
+#     for level, cv in crit_vals.items():
+#         print(f"   {level} : {cv:.3f}")
+
+# Assuming df_inf is already defined and contains the four series
+fig, ax = plt.subplots()
+for col in df_inf.columns:
+    ax.plot(df_inf.index, df_inf[col], label=col)
+ax.legend()
+ax.set_title('EU Inflation (Monthly) for Selected Countries')
+ax.set_xlabel('Date')
+ax.set_ylabel('Inflation Rate')
+plt.tight_layout()
+plt.show()
+#%%
+
+
+'''     Sentiments      '''
+
+
+
 sentiment_df = pd.read_csv(
     r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Data\Barbaglia, L., Consoli, S., & Manzan, S. (2024)\eu_sentiments.csv", 
     parse_dates=['date']
 )
-#%%
+
 # Define sentiment topics
 sentiment_cols = ['economy', 'financial sector', 'inflation', 'manufacturing', 'monetary policy', 'unemployment']
 
@@ -117,60 +256,113 @@ quarterly_sentiment['date'] = (
     + QuarterEnd(0)          # shift to quarter-end
 )
 
-#%% Filter GDP data to relevant entries
-# First: focus on GDP at market prices
-gdp_df = df[df['na_item'] == 'Gross domestic product at market prices']
 
-# Further restrict to seasonally and calendar adjusted data
-gdp_df = gdp_df[gdp_df['s_adj'] == 'Seasonally and calendar adjusted data']
+# 1. Assign month periods
+sentiment_pivot['month'] = sentiment_pivot['date'].dt.to_period('M')
 
-# Remove duplicates and average values if multiple entries exist
-gdp_df = gdp_df.groupby(['TIME_PERIOD', 'geo'])['OBS_VALUE'].mean().reset_index()
+# 2. Group by month and compute mean for each country-topic
+monthly_sentiment = (
+    sentiment_pivot
+      .groupby('month')
+      .mean()            # numeric cols only, so 'date' dropped automatically
+      .reset_index()
+)
 
-# Ensure datetime format for merging later
-gdp_df['TIME_PERIOD'] = pd.to_datetime(gdp_df['TIME_PERIOD'])
+# 3. Map period back to exact month-end timestamp
+monthly_sentiment['date'] = (
+    monthly_sentiment['month']
+      .dt.to_timestamp()  # gives first-of-month
+      + MonthEnd(0)        # shift to month-end
+)
 
-# Pivot to wide format: one column per country
-gdp_data = gdp_df.pivot(index='TIME_PERIOD', columns='geo', values='OBS_VALUE')
+# 4. (Optional) Drop the 'month' column if you only need 'date'
+monthly_sentiment = monthly_sentiment.drop(columns='month')
 
 #%%
-# First: focus on GDP at market prices
-wage_df = df[df['na_item'] == 'Wages and salaries']
 
-# Further restrict to seasonally and calendar adjusted data
-wage_df = wage_df[wage_df['s_adj'] == 'Unadjusted data (i.e. neither seasonally adjusted nor calendar adjusted data)']
-
-# Remove duplicates and average values if multiple entries exist
-wage_df = wage_df.groupby(['TIME_PERIOD', 'geo'])['OBS_VALUE'].mean().reset_index()
-
-# Ensure datetime format for merging later
-wage_df['TIME_PERIOD'] = pd.to_datetime(wage_df['TIME_PERIOD'])
-
-# Pivot to wide format: one column per country
-wage_data = wage_df.pivot(index='TIME_PERIOD', columns='geo', values='OBS_VALUE')
-
-
-
-#%% Drop unwanted Euro area aggregate columns if present
-euro_areas_to_exclude = [
-    'Euro area - 19 countries (2015-2022)',
-    'Euro area - 19 countries  (2015-2022)',
-    'Euro area – 20 countries (from 2023)',  # UTF-8 dash
-    'Euro area â€“ 20 countries (from 2023)',  # Incorrect encoding
+# 0) Define the exact Ashwin sentiments in the file:
+ashwin_sentiment_cols = [
+    'loughran_sum_fr', 'stability_sum_fr', 'afinn_sum_fr', 'vader_sum_fr', 'econlex_sum_fr',
+    'loughran_sum_ge', 'stability_sum_ge', 'afinn_sum_ge', 'vader_sum_ge', 'econlex_sum_ge',
+    'loughran_sum_it', 'stability_sum_it', 'afinn_sum_it', 'vader_sum_it', 'econlex_sum_it',
+    'loughran_sum_sp', 'stability_sum_sp', 'afinn_sum_sp', 'vader_sum_sp', 'econlex_sum_sp'
 ]
+# ——————————————————————————————————————————
 
-gdp_data = gdp_data.drop(columns=[col for col in euro_areas_to_exclude if col in gdp_data.columns], errors='ignore')
-wage_data = wage_data.drop(columns=[col for col in euro_areas_to_exclude if col in wage_data.columns], errors='ignore')
-# external_balance_data = gdp_data.drop(columns=[col for col in euro_areas_to_exclude if col in external_balance_data.columns], errors='ignore')
+# 1. Peek at header to confirm what's present
+header_df    = pd.read_csv(
+    r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Data\Ashwin, J., Kalamara, E., & Saiz, L. (2024)\euro_daily_export.csv",
+    nrows=0
+)
+existing_cols = set(header_df.columns)
+ashwin_cols_to_load = [c for c in ashwin_sentiment_cols if c in existing_cols]
 
-# Limit data to post-1995 only
-gdp_data = gdp_data[gdp_data.index >= pd.to_datetime("1995-04-01")]
-gdp_data = gdp_data[gdp_data.index <= pd.to_datetime("2024-10-01")]
-wage_data = wage_data[wage_data.index >= pd.to_datetime("1995-04-01")]
-wage_data = wage_data[wage_data.index <= pd.to_datetime("2024-10-01")]
-gdp_data = gdp_data[gdp_data.index >= pd.to_datetime("1995-04-01")]
-gdp_data = gdp_data[gdp_data.index <= pd.to_datetime("2024-10-01")]
+# 2. Load just date + those sentiment series
+ashwin_daily_country_sentiment_df = pd.read_csv(
+    r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Data\Ashwin, J., Kalamara, E., & Saiz, L. (2024)\euro_daily_export.csv",
+    usecols=['date'] + ashwin_cols_to_load
+)
 
+# 3. Ensure 'date' is datetime
+ashwin_daily_country_sentiment_df['date'] = pd.to_datetime(
+    ashwin_daily_country_sentiment_df['date'],
+    dayfirst=True,    # if needed
+    errors='coerce'
+)
+
+# 4. Create quarter & month helpers
+ashwin_daily_country_sentiment_df['quarter'] = (
+    ashwin_daily_country_sentiment_df['date']
+    .dt.to_period('Q')
+)
+ashwin_daily_country_sentiment_df['month'] = (
+    ashwin_daily_country_sentiment_df['date']
+    .dt.to_period('M')
+)
+
+# 5. Build rename map to go from "<prefix>_sum_<suffix>" → "<CC>_<prefix>"
+suffix_to_code = {'fr':'FR','ge':'DE','it':'IT','sp':'ES'}
+sum_prefixes   = ['loughran_sum','stability_sum','afinn_sum','vader_sum','econlex_sum']
+
+rename_map = {}
+for pref in sum_prefixes:
+    topic = pref.replace('_sum','')    # drop the "_sum"
+    for suf, code in suffix_to_code.items():
+        old = f"{pref}_{suf}"
+        new = f"{code}_{topic}"
+        if old in ashwin_daily_country_sentiment_df.columns:
+            rename_map[old] = new
+
+# 6. Apply renaming
+ashwin_daily_country_sentiment_df.rename(columns=rename_map, inplace=True)
+
+# 7. Define the new sentiment column names
+sentiment_cols_renamed = list(rename_map.values())
+sentiment_cols_ashwin = ['loughran', 'stability', 'afinn', 'vader', 'econlex']
+# 8. Aggregate to quarterly
+ashwin_quarterly_country_sentiment_df = (
+    ashwin_daily_country_sentiment_df
+    .groupby('quarter')[sentiment_cols_renamed]
+    .mean()
+    .reset_index()
+)
+ashwin_quarterly_country_sentiment_df['date'] = (
+    ashwin_quarterly_country_sentiment_df['quarter']
+    .dt.to_timestamp() + QuarterEnd(0)
+)
+
+# 9. Aggregate to monthly
+ashwin_monthly_country_sentiment_df = (
+    ashwin_daily_country_sentiment_df
+      .groupby('month')[sentiment_cols_renamed]
+      .mean()
+      .reset_index()      # preserves 'month'
+)
+ashwin_monthly_country_sentiment_df['date'] = (
+    ashwin_monthly_country_sentiment_df['month']
+      .dt.to_timestamp()  # first of month
+    + MonthEnd(0)         # end of month
+)
 
 #%% Load Europe Policy Uncertainty (EPU) data
 epu_path = r"C:/Users/oskar/Desktop/Uni/4. Mastersemester/Master Thesis/Data/Baker, S. R., Bloom, N., & Davis, S. J. (2016)/Europe_Policy_Uncertainty_Data.xlsx"
@@ -413,85 +605,162 @@ for label, countries in focus_sets.items():
 # plt.ylabel('GDP')
 # plt.grid(True)
 # plt.show()
-# '''To evaluate and compare the predictive performance of different models across countries, 
-# we loop through each country in the GDP dataset and apply a unified forecasting framework. 
-# For each country, the GDP series is first log-differenced to ensure stationarity. 
-# A two-letter country code is mapped, and for Italy, the time series is truncated to align with the available sentiment data. 
-# The auto_arima function is used to automatically determine the optimal ARIMA order for univariate benchmarks. 
-# Next, the top two most predictive sentiment topics are selected based on a linear regression fit to the in-sample GDP data. 
-# All six sentiment topics are passed for use in the Lasso regression. The core forecasting is performed by the forecast_with_sentiment_models function, 
-# which implements and evaluates five models: ARIMA, ARIMAX, U-MIDAS (unrestricted MIDAS with daily lags), 
-# r-MIDAS (restricted MIDAS using exponential Almon lag structure), and Lasso (shrinkage regression over all sentiment lags). 
-# The function returns RMSE values for each model, and optionally plots the forecast paths against actual GDP growth. 
-# This setup allows consistent, comparative, and extensible forecasting across different model classes and countries.'''
 
-# # Calling the functions
+#%%
+'''To evaluate and compare the predictive performance of different models across countries, 
+we loop through each country in the GDP dataset and apply a unified forecasting framework. 
+For each country, the GDP series is first log-differenced to ensure stationarity. 
+A two-letter country code is mapped, and for Italy, the time series is truncated to align with the available sentiment data. 
+The auto_arima function is used to automatically determine the optimal ARIMA order for univariate benchmarks. 
+Next, the top two most predictive sentiment topics are selected based on a linear regression fit to the in-sample GDP data. 
+All six sentiment topics are passed for use in the Lasso regression. The core forecasting is performed by the forecast_with_sentiment_models function, 
+which implements and evaluates five models: ARIMA, ARIMAX, U-MIDAS (unrestricted MIDAS with daily lags), 
+r-MIDAS (restricted MIDAS using exponential Almon lag structure), and Lasso (shrinkage regression over all sentiment lags). 
+The function returns RMSE values for each model, and optionally plots the forecast paths against actual GDP growth. 
+This setup allows consistent, comparative, and extensible forecasting across different model classes and countries.'''
 
-# arimax_results = {}
-# gdp_cutoff = pd.to_datetime("2022-06-30")
-# wage_cutoff = pd.to_datetime("2022-06-30")
+''' GDP Figas'''
+# Calling the functions
 
-# # Trim GDP and wage data
-# gdp_data = gdp_data[gdp_data.index < gdp_cutoff]
-# wage_data = wage_data[wage_data.index < wage_cutoff]
+arimax_results = {}
+all_summary_rmse_gdp_figas = {}
+all_raw_outputs_gdp_figas   = {}
+all_combo_outputs_gdp_figas = {}
 
-# for country in gdp_data.columns:
-#     print(f"\n>>> {country} <<<")
+
+gdp_cutoff = pd.to_datetime("2022-06-30")
+wage_cutoff = pd.to_datetime("2022-06-30")
+
+# Trim GDP and wage data
+gdp_data = gdp_data[gdp_data.index < gdp_cutoff]
+wage_data = wage_data[wage_data.index < wage_cutoff]
+
+for country in gdp_data.columns:
+    print(f"\n>>> {country} <<<")
+    country = 'Germany'
+    # Transform GDP to log-diff
+    series = transform_series(gdp_data[country], method='log_diff')
+    # Map country to code
+    country_map = {'Germany': 'DE', 'France': 'FR', 'Spain': 'ES', 'Italy': 'IT'}
+    country_code = country_map.get(country)
+    if not country_code:
+        continue
+
+    # --- make local copies of your sentiment dataframes ---
+    qs = quarterly_sentiment.copy()
+    sp = sentiment_pivot.copy()
+
+    # Adjust start dates ONLY for Italy due to sentiment coverage
+    if country == "Italy":
+        print(f"{country}: Adjusting sample start due to sentiment coverage")
+        series = series[series.index >= pd.to_datetime("1997-01-01")]
+        qs = qs[qs['quarter'] >= pd.Period("1996Q3")]
+        sp = sp[sp['date']   >= pd.to_datetime("1996-09-05")]
+
+    # Estimate ARIMA order
+    try:
+        model = auto_arima(series.dropna(), max_p=8, max_d=2, max_q=8,
+                            seasonal=False, stepwise=True,
+                            error_action='ignore', suppress_warnings=True)
+        arima_order = model.order
+    except:
+        arima_order = (1, 0, 1)
+
+    # Select top 2 sentiment variables (for ARIMAX / MIDAS)
+    top2 = get_top_2_sentiments(country_code, series, qs, sentiment_cols)
+    print(f"{country}: Best sentiment topics = {top2}")
+
+    # All sentiment topics (for Lasso)
+    sentiment_cols = ['economy', 'financial sector', 'inflation',
+                      'manufacturing', 'monetary policy', 'unemployment']
+
+    # Run all models, passing the *local* qs & sp
+    results = forecast_with_sentiment_models_qd(
+        series=series,
+        sentiment_df_quarterly=qs,
+        sentiment_df_daily=sp,
+        country_code=country_code,
+        sentiment_vars=top2,
+        sentiment_cols=sentiment_cols,
+        order=arima_order,
+        forecast_horizon=1,
+        plot=True
+    )
+
+    print(f"{country} RMSEs: {results['summary_rmse']}")
+    all_summary_rmse_gdp_figas[country] = results['summary_rmse']
+    all_raw_outputs_gdp_figas[country]   = results['raw_outputs']
+    all_combo_outputs_gdp_figas[country] = results['combo_outputs']
+
+#%%
+''' Inf Figas'''
+   
+cutoff = pd.to_datetime("2022-06-30")
+
+inf_data = df_inf[df_inf.index < cutoff]
+msent    = monthly_sentiment[monthly_sentiment['date'] < cutoff]
+dsent    = sentiment_pivot[sentiment_pivot['date'] < cutoff]
+
+
+all_summary_rmse_inf_figas = {}
+all_raw_outputs_inf_figas   = {}
+all_combo_outputs_inf_figas = {}
+# --- 3) Loop over each country and call the forecast function ---
+results_monthly = {}
+country_map = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
+
+for country in inf_data.columns:
+    print(f"\n>>> {country} <<<")
+    series = inf_data[country].dropna()
+    # Map to code
+    code = country_map.get(country)
+    if code is None:
+        continue
+
+    # For Italy: align start date if necessary
+    ms = msent.copy()
+    ds = dsent.copy()
+    if country == "Italy":
+        print(" Italy: trimming to match sentiment coverage")
+        series = series[series.index >= pd.to_datetime("1997-01-01")]
+        ms     = ms[ms['date'] >= pd.to_datetime("1996-09-30")]
+        ds     = ds[ds['date'] >= pd.to_datetime("1996-09-05")]
+
+    # 1) Fit auto_arima to pick (p,d,q) on the inflation series
+    try:
+        am = auto_arima(series, seasonal=False, stepwise=True,
+                        error_action='ignore', suppress_warnings=True,
+                        max_p=8, max_d=2, max_q=8)
+        order = am.order
+    except:
+        order = (1,0,1)
+
+    # 2) Pick your top-2 sentiment topics however you like; here we just hardcode two:
+    top2 = get_top_2_sentiments(code, series, ms, sentiment_cols)
+    print(f"{country}: Best sentiment topics = {top2}")
     
-#     # Transform GDP to log-diff
-#     series = transform_series(gdp_data[country], method='log_diff')
+    # 3) Call the monthly/daily function
+    results = forecast_with_sentiment_models_md(
+        series=series,
+        sentiment_df_monthly=ms,
+        sentiment_df_daily=ds,
+        country_code=code,
+        sentiment_vars=top2,
+        sentiment_cols=['economy','financial sector','inflation',
+                        'manufacturing','monetary policy','unemployment'],
+        order=order,
+        forecast_horizon=1,
+        plot=True
+    )
 
-#     # Map country to code
-#     country_map = {'Germany': 'DE', 'France': 'FR', 'Spain': 'ES', 'Italy': 'IT'}
-#     country_code = country_map.get(country)
-#     if not country_code:
-#         continue
-
-#     # --- make local copies of your sentiment dataframes ---
-#     qs = quarterly_sentiment.copy()
-#     sp = sentiment_pivot.copy()
-
-#     # Adjust start dates ONLY for Italy due to sentiment coverage
-#     if country == "Italy":
-#         print(f"{country}: Adjusting sample start due to sentiment coverage")
-#         series = series[series.index >= pd.to_datetime("1997-01-01")]
-#         qs = qs[qs['quarter'] >= pd.Period("1996Q3")]
-#         sp = sp[sp['date']   >= pd.to_datetime("1996-09-05")]
-
-#     # Estimate ARIMA order
-#     try:
-#         model = auto_arima(series.dropna(), max_p=8, max_d=2, max_q=8,
-#                            seasonal=False, stepwise=True,
-#                            error_action='ignore', suppress_warnings=True)
-#         arima_order = model.order
-#     except:
-#         arima_order = (1, 0, 1)
-
-#     # Select top 2 sentiment variables (for ARIMAX / MIDAS)
-#     top2 = get_top_2_sentiments(country_code, series, qs, sentiment_cols)
-#     print(f"{country}: Best sentiment topics = {top2}")
-
-#     # All sentiment topics (for Lasso)
-#     sentiment_cols = ['economy', 'financial sector', 'inflation',
-#                       'manufacturing', 'monetary policy', 'unemployment']
-
-#     # Run all models, passing the *local* qs & sp
-#     rmse_results = forecast_with_sentiment_models_qd(
-#         series=series,
-#         sentiment_df_quarterly=qs,
-#         sentiment_df_daily=sp,
-#         country_code=country_code,
-#         sentiment_vars=top2,
-#         sentiment_cols=sentiment_cols,
-#         order=arima_order,
-#         forecast_horizon=1,
-#         plot=True
-#     )
-
-#     print(f"{country} RMSEs: {rmse_results}")
-
-
+    print(f"{country} RMSEs: {results['summary_rmse']}")
+    all_summary_rmse_inf_figas[country] = results['summary_rmse']
+    all_raw_outputs_inf_figas[country]   = results['raw_outputs']
+    all_combo_outputs_inf_figas[country] = results['combo_outputs']
+    
+    
 #%%  Evaluate with EPU from 1997-01 to 2024-10
+''' GDP EPU'''
 # 1) Trim GDP to 1997-01-01…2024-10-01
 gdp_data = gdp_data.loc["1997-01-01":"2024-07-01"]
 
@@ -507,6 +776,12 @@ epu_quarterly = (
 
 
 # 3) Set up loop
+
+all_summary_rmse_gdp_epu = {}
+all_raw_outputs_gdp_epu   = {}
+all_combo_outputs_gdp_epu = {}
+
+
 country_map = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
 for country, code in country_map.items():
     if country not in gdp_data:
@@ -532,7 +807,7 @@ for country, code in country_map.items():
     )
 
     # 6) Forecast (one series only: EPU)
-    rmse = forecast_with_sentiment_models_qm(
+    results = forecast_with_sentiment_models_qm(
         series=series,
         sentiment_df_quarterly=qs,
         sentiment_df_monthly=ms,
@@ -544,75 +819,282 @@ for country, code in country_map.items():
         plot=True
     )
 
-    print(f"{country} RMSEs: {rmse}")
+    print(f"{country} RMSEs: {results['summary_rmse']}")
+    all_summary_rmse_gdp_epu[country] = results['summary_rmse']
+    all_raw_outputs_gdp_epu[country]   = results['raw_outputs']
+    all_combo_outputs_gdp_epu[country] = results['combo_outputs']
+    
+    
+#%%
+'''    Inf EPU'''
+# 1) Cutoff
+cutoff = pd.to_datetime("2024-12-01")
+inf_data = df_inf[df_inf.index < cutoff]
+# or if its index is a PeriodIndex (freq='M'), convert:
+epu_monthly['date'] = epu_monthly.index + MonthEnd(0)
+
+# 2) Prepare result containers
+all_summary_rmse_inf_epu = {}
+all_raw_outputs_inf_epu  = {}
+all_combo_outputs_inf_epu  = {}
+
+country_map = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
+for country, code in country_map.items():
+    if country not in gdp_data:
+        continue
+
+    print(f"\n>>> {country} <<<")
+    # 1) Definiere deine beiden Grenzen
+    start = "2001-01-01" if code=="ES" else "1997-01-01"
+    sent_start = pd.to_datetime(start)
+    sent_end   = pd.to_datetime("2024-12-01")
+    
+    # 2) Baue die Ziel‐Serie y so, dass sie nur in diesem Intervall lebt
+    y = inf_data[country].dropna().copy()
+    # auf Monatsende verschieben
+    y.index = y.index.to_period('M').to_timestamp() + MonthEnd(0)
+    # nun lower + upper cut
+    y = y.loc[(y.index >= sent_start) & (y.index <= sent_end)]
+    
+    # 3) Baue dein EPU‐DF so, dass es nur in diesem Intervall lebt
+    if 'date' in epu_monthly.columns:
+        ms = epu_monthly[['date', code]].copy()
+    else:
+        ms = epu_monthly.reset_index().rename(columns={'index':'date'})[['date', code]].copy()
+    ms['date'] = pd.to_datetime(ms['date']) + MonthEnd(0)
+    ms = ms.rename(columns={code: f"{code}_EPU"})
+    ms = ms.loc[(ms['date'] >= sent_start) & (ms['date'] <= sent_end)]
+    
+    # 4) Intersection (eigentlich überflüssig, weil du schon beschnitten hast)
+    common = y.index.intersection(ms['date'])
+    y      = y.loc[common]
+    ms     = ms[ms['date'].isin(common)].copy()
+
+    try:
+        am = auto_arima(y, seasonal=False, stepwise=True,
+                        error_action='ignore', suppress_warnings=True,
+                        max_p=8, max_d=2, max_q=8)
+        order = am.order
+    except:
+        order = (1,0,1)
+
+    # d) Call the monthly–monthly function
+    results = forecast_with_sentiment_models_mm(
+        series=y,
+        sentiment_df_monthly=ms,
+        country_code=code,
+        sentiment_vars=["EPU"],      # for ARIMAX / DL
+        sentiment_cols=["EPU"],      # for LASSO / RF
+        order=order,
+        forecast_horizon=1,
+        lags=1,
+        plot=True
+    )
+
+    # e) Store
+    print(f"{country} RMSEs: {results['summary_rmse']}")
+    all_summary_rmse_inf_epu[country] = results['summary_rmse']
+    all_raw_outputs_inf_epu[country]  = results['raw_outputs']
+    all_combo_outputs_inf_epu[country] = results['combo_outputs']
+    
+    
 
 #%%
-'''
-Now change the end of the time series to evaluate the models and their estimates pre covid 
-for comparison in times with high uncertainty
-'''
+''' GDP Ashwin'''
+# 4) Filter to your common sentiment sample 2002-01-02 → 2020-10-01
+sent_start = pd.to_datetime("2002-01-02")
+sent_end   = pd.to_datetime("2020-10-01")
 
-    
-gdp_cutoff = pd.to_datetime("2020-01-01")
-wage_cutoff = pd.to_datetime("2020-01-01")
-sentiment_cutoff = pd.to_datetime("2020-01-01")
+ashwin_daily_sent_filt = ashwin_daily_country_sentiment_df[
+    (ashwin_daily_country_sentiment_df['date'] >= sent_start) &
+    (ashwin_daily_country_sentiment_df['date'] <= sent_end)
+].copy()
 
-# Trim GDP and wage data
-gdp_data = gdp_data[gdp_data.index < gdp_cutoff]
-wage_data = wage_data[wage_data.index < wage_cutoff]
+ashwin_quarterly_sent_filt = ashwin_quarterly_country_sentiment_df[
+    (ashwin_quarterly_country_sentiment_df['date'] >= sent_start) &
+    (ashwin_quarterly_country_sentiment_df['date'] <= sent_end)
+].copy()
 
-# Trim sentiment data
-quarterly_sentiment = quarterly_sentiment[quarterly_sentiment['quarter'] < pd.Period("2020Q1")]
-sentiment_pivot = sentiment_pivot[sentiment_pivot['date'] < sentiment_cutoff]
+# 5) Trim your GDP data
+gdp_cutoff = pd.to_datetime("2020-10-01")
+gdp_data   = gdp_data[gdp_data.index < gdp_cutoff]
 
+# 6) Now your loop, selecting top-2 by quarterly correlation of the raw *_sum_<cc> names
+all_summary_rmse_gdp_ashwin = {}
+all_raw_outputs_gdp_ashwin   = {}
+all_combo_outputs_gdp_ashwin = {}
 
-arimax_results = {}
+country_map       = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
 
 for country in gdp_data.columns:
     print(f"\n>>> {country} <<<")
     
-    # Transform GDP to log-diff
-    series = transform_series(gdp_data[country], method='log_diff')
-    # series = transform_series(wage_data[country], method='log_diff')
-
-    # Map country to code
-    country_map = {'Germany': 'DE', 'France': 'FR', 'Spain': 'ES', 'Italy': 'IT',  'United Kingdom': 'UK'}
-    country_code = country_map.get(country)
-    if not country_code:
+    # 1) Load & transform GDP
+    series = transform_series(gdp_data[country], method='log_diff').dropna()
+    
+    # 2) **Trim to sentiment sample window**:
+    series = series[(series.index >= sent_start) & (series.index <= sent_end)]
+    
+    code   = country_map.get(country)
+    if code is None:
         continue
 
-    # Adjust start dates ONLY for Italy due to sentiment data availability
+    # 3) Local copies of filtered sentiments
+    qs = ashwin_quarterly_sent_filt.copy()
+    ds = ashwin_daily_sent_filt.copy()
+
+    # 4) Italy’s later start
     if country == "Italy":
-        print(f"{country}: Adjusting sample start due to sentiment coverage")
-        series = series[series.index >= pd.to_datetime("1997-01-01")]
-        quarterly_sentiment = quarterly_sentiment[quarterly_sentiment['quarter'] >= pd.Period("1996Q3")]
-        sentiment_pivot = sentiment_pivot[sentiment_pivot['date'] >= pd.to_datetime("1996-09-05")]
+        series = series[series.index >= "1997-01-01"]
+        qs     = qs[qs['quarter'] >= pd.Period("1996Q3")]
+        ds     = ds[ds['date']   >= pd.to_datetime("1996-09-05")]
 
-    # Estimate ARIMA order
+    # 5) auto_arima
     try:
-        model = auto_arima(series.dropna(), max_p=8, max_d=2, max_q=8, seasonal=False, stepwise=True,
-                           error_action='ignore', suppress_warnings=True)
-        arima_order = model.order
+        m = auto_arima(series, seasonal=False, stepwise=True,
+                       max_p=8, max_d=2, max_q=8,
+                       error_action='ignore', suppress_warnings=True)
+        arima_order = m.order
     except:
-        arima_order = (1, 0, 1)
+        arima_order = (1,0,1)
 
-    # Select top 2 sentiment variables (for ARIMAX / MIDAS)
-    top2 = get_top_2_sentiments(country_code, series, quarterly_sentiment, sentiment_cols)
-    print(f"{country}: Best sentiment topics = {top2}")
+    # 6) Pick top‐2 Ashwin sentiments (raw names) for this country
+    top2 = get_top_2_sentiments(code, series, qs, sentiment_cols_ashwin)
+    print(f"{country}: Best sentiment vars = {top2}")
 
-    # All sentiment topics (for Lasso)
-    sentiment_cols = ['economy', 'financial sector', 'inflation', 'manufacturing', 'monetary policy', 'unemployment']
-
-    # Run all models
-    rmse_results = forecast_with_sentiment_models_qd(
+    # 7) Forecast
+    results = forecast_with_sentiment_models_qd(
         series=series,
-        sentiment_df_quarterly=quarterly_sentiment,
-        sentiment_df_daily=sentiment_pivot,
-        country_code=country_code,
+        sentiment_df_quarterly=qs,
+        sentiment_df_daily=ds,
+        country_code=code,
         sentiment_vars=top2,
-        sentiment_cols=sentiment_cols,
+        sentiment_cols=sentiment_cols_ashwin,
         order=arima_order,
+        forecast_horizon=1,
         plot=True
     )
 
-    print(f"{country} RMSEs: {rmse_results}")
+    print(f"{country} RMSEs: {results['summary_rmse']}")
+    all_summary_rmse_gdp_ashwin[country] = results['summary_rmse']
+    all_raw_outputs_gdp_ashwin[country]   = results['raw_outputs']
+    all_combo_outputs_gdp_ashwin[country] = results['combo_outputs']
+    
+    
+#%%
+
+''' Inf Ashwin'''
+# 4) Filter to your common sentiment sample 2002-01-02 → 2020-10-01
+sent_start = pd.to_datetime("2002-01-02")
+sent_end   = pd.to_datetime("2020-10-01")
+
+cutoff = pd.to_datetime("2020-10-01")
+
+inf_data = df_inf[df_inf.index < cutoff]
+
+
+# ensure the index is datetime or period type
+ashwin_monthly_country_sentiment_df.index = pd.to_datetime(
+    ashwin_monthly_country_sentiment_df.index
+)
+
+ashwin_monthly = ashwin_monthly_country_sentiment_df[
+    (ashwin_monthly_country_sentiment_df['date'] >= sent_start) &
+    (ashwin_monthly_country_sentiment_df['date'] <= sent_end)
+].copy()
+
+
+ashwin_daily = ashwin_daily_country_sentiment_df[
+    (ashwin_daily_country_sentiment_df['date'] >= sent_start) &
+    (ashwin_daily_country_sentiment_df['date'] <= sent_end)
+].copy()
+
+all_summary_rmse_inf_ashwin = {}
+all_raw_outputs_inf_ashwin   = {}
+all_combo_outputs_inf_ashwin = {}
+
+country_map = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
+
+for country in inf_data.columns:
+    print(f"\n>>> {country} <<<")
+    series = inf_data[country].dropna()
+    
+    # 2) **Trim to sentiment sample window**:
+    series = series[(series.index >= sent_start) & (series.index <= sent_end)]
+    
+    
+    code   = country_map.get(country)
+    if code is None:
+        continue
+
+    # Local copies for this country
+    ms = ashwin_monthly.copy()
+    ds = ashwin_daily.copy()
+
+    # Italy has later coverage
+    if country == "Italy":
+        print(" Italy: trimming to match sentiment coverage")
+        series = series[series.index >= pd.to_datetime("1997-01-01")]
+        ms     = ms[ms['date'] >= pd.to_datetime("1996-09-30")]
+        ds     = ds[ds['date'] >= pd.to_datetime("1996-09-05")]
+
+    # 2) Auto-ARIMA on inflation
+    try:
+        am    = auto_arima(series, seasonal=False, stepwise=True,
+                           error_action='ignore', suppress_warnings=True,
+                           max_p=8, max_d=2, max_q=8)
+        order = am.order
+    except:
+        order = (1,0,1)
+
+    # 3) Pick top-2 Ashwin sentiments for this country
+    top2 = get_top_2_sentiments(code, series, ms, sentiment_cols_ashwin)
+    print(f"{country}: Best sentiment vars = {top2}")
+
+    # 4) Run your monthly/daily forecast function
+    results = forecast_with_sentiment_models_md(
+        series=series,
+        sentiment_df_monthly=ms,
+        sentiment_df_daily=ds,
+        country_code=code,
+        sentiment_vars=top2,
+        sentiment_cols=sentiment_cols_ashwin,
+        order=order,
+        forecast_horizon=1,
+        plot=True
+    )
+
+    print(f"{country} RMSEs: {results['summary_rmse']}")
+    all_summary_rmse_inf_ashwin[country] = results['summary_rmse']
+    all_raw_outputs_inf_ashwin[country]   = results['raw_outputs']
+    all_combo_outputs_inf_ashwin[country] = results['combo_outputs']
+
+
+#%%
+for country in ['Germany', 'France', 'Spain', 'Italy']:
+    plot_country_rolling_rmse(
+        country=country,
+        gdp_epu=all_raw_outputs_gdp_epu[country],
+        gdp_figas=all_raw_outputs_gdp_figas[country],
+        gdp_ashwin=all_raw_outputs_gdp_ashwin[country],
+        inf_epu=all_raw_outputs_inf_epu[country],
+        inf_figas=all_raw_outputs_inf_figas[country],
+        inf_ashwin=all_raw_outputs_inf_ashwin[country],
+        window=4,
+        start='2017-01-01',
+        end='2024-12-31'
+    )
+    
+for country in ['Germany', 'France', 'Spain', 'Italy']:
+    plot_country_rolling_rmse(
+        country=country,
+        gdp_epu=all_combo_outputs_gdp_epu[country],
+        gdp_figas=all_combo_outputs_gdp_figas[country],
+        gdp_ashwin=all_combo_outputs_gdp_ashwin[country],
+        inf_epu=all_combo_outputs_inf_epu[country],
+        inf_figas=all_combo_outputs_inf_figas[country],
+        inf_ashwin=all_combo_outputs_inf_ashwin[country],
+        window=4,
+        start='2017-01-01',
+        end='2024-12-31'
+    )

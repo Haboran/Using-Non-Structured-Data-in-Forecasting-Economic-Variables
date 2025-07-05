@@ -29,33 +29,63 @@ from statsmodels.stats.diagnostic import acorr_ljungbox
 from scipy.stats import t
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
+import matplotlib.dates as mdates
 
 #%% 
-'''PCA to get the two most important sentiments'''
-def get_top_2_sentiments(country_code, gdp_series, quarterly_sentiment, sentiment_cols, window_split=(0.4, 0.4, 0.2)):
-    # Align sentiment and GDP
-    df = quarterly_sentiment[['quarter'] + [f"{country_code}_{topic}" for topic in sentiment_cols]].copy()
-    df = df.set_index('quarter')
-    gdp_series = gdp_series.copy()
-    gdp_series.index = gdp_series.index.to_period('Q')
-    df['gdp'] = gdp_series
+def get_top_2_sentiments(country_code, target_series, sentiment_df, sentiment_cols,
+                         window_split=(0.4, 0.4, 0.2)):
+    """
+    Picks the two sentiment topics whose levels best explain target_series
+    over the first (window_split[0]+window_split[1]) fraction of the sample.
 
+    Automatically handles either:
+      - Quarterly sentiment_df (with a 'quarter' Period column), or
+      - Monthly sentiment_df   (with a 'month'  Period column).
+
+    If sentiment_df is quarterly but target_series is monthly, target_series
+    is resampled to quarters by taking the last value in each quarter.
+    """
+    df = sentiment_df.copy()
+
+    # 1) Detect periodicity
+    if 'quarter' in df.columns:
+        period_col, rule = 'quarter', 'Q'
+    elif 'month' in df.columns:
+        period_col, rule = 'month',   'M'
+    else:
+        raise ValueError("sentiment_df needs either a 'quarter' or 'month' column")
+
+    # 2) Subset to your exogs and set index
+    exog_cols = [f"{country_code}_{topic}" for topic in sentiment_cols]
+    df = df[[period_col] + exog_cols].set_index(period_col)
+
+    # 3) Prepare target_series
+    ts = target_series.copy()
+    # If sentiment_df is quarterly, aggregate monthly target to quarters
+    if rule == 'Q':
+        ts = ts.resample('Q').last()
+    # Now convert to the same PeriodIndex
+    ts.index = ts.index.to_period(rule)
+
+    # 4) Merge
+    df['y'] = ts
     df = df.dropna()
-    
-    # Only use training + adjustment data for selection
+
+    # 5) Split off the training+validation window
     T = len(df)
-    split_idx = int((window_split[0] + window_split[1]) * T)
-    df_train = df.iloc[:split_idx]
+    split_point = int((window_split[0] + window_split[1]) * T)
+    train = df.iloc[:split_point]
 
-    X = df_train.drop(columns='gdp')
-    y = df_train['gdp']
-
+    # 6) Fit OLS and pick top-2 by absolute coefficient
+    X = train.drop(columns='y')
+    y = train['y']
     model = LinearRegression().fit(X, y)
     coefs = abs(model.coef_)
     top2_idx = coefs.argsort()[-2:][::-1]
-    top2_features = X.columns[top2_idx].tolist()
-    
-    return [col.split("_")[1] for col in top2_features]  # return topic names only
+    top2_feats = X.columns[top2_idx]
+
+    # 7) Return just the topic name (strip off "CC_")
+    return [feat.split("_", 1)[1] for feat in top2_feats]
 
 
 
@@ -192,8 +222,6 @@ def rolling_rmse_plot(model_outputs, dates, title="Rolling RMSE Comparison by Mo
     plt.figure(figsize=(12, 6))
     
     for model_name, (actuals, preds, model_dates) in model_outputs.items():
-        if len(actuals) != len(preds):
-            continue
         errors = np.array(actuals) - np.array(preds)
         trimmed_index = pd.Index(model_dates[-len(errors):])
         rmse_rolling = pd.Series(errors ** 2, index=trimmed_index).rolling(window=4, min_periods=1).mean() ** 0.5
@@ -246,48 +274,132 @@ def scatter_actual_vs_pred(model_outputs, title_prefix='Actual vs Predicted'):
 
 
 #%% Uncomment to enable: Rolling‐Window RMSE Heatmap
-def rolling_rmse_heatmap(model_outputs, window=4, title='Rolling RMSE Heatmap'):
-    """
-    Build a heatmap of rolling RMSE (window-quarter) for each model over time.
-    
-    Parameters
-    ----------
-    model_outputs : dict
-        model_name -> (actuals_list, preds_list, dates_list)
-    window : int
-        Rolling window in number of observations (e.g. 4 quarters).
-    title : str
-        Figure title.
-    """
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import pandas as pd
+def rolling_rmse_heatmap(model_outputs, window=4,
+                         start='2017-01-01', end='2024-12-31',
+                         title='Rolling RMSE Heatmap'):
 
-    # compute rolling-RMSE series for each model
+    # --- compute rolling-RMSE series (unchanged) ---
     rmse_dict = {}
-    all_dates = pd.DatetimeIndex([])
     for name, (acts, preds, dates) in model_outputs.items():
         acts = np.array(acts)
         preds = np.array(preds)
         idx = pd.to_datetime(dates[-len(acts):])
         errs = acts - preds
-        rmse = pd.Series(errs**2, index=idx).rolling(window=window, min_periods=1).mean()**0.5
+        rmse = (pd.Series(errs**2, index=idx)
+                   .rolling(window=window, min_periods=1)
+                   .mean()**0.5)
         rmse_dict[name] = rmse
-        all_dates = all_dates.union(rmse.index)
 
-    # build DataFrame: rows=models, cols=sorted dates
-    all_dates = all_dates.sort_values()
-    df = pd.DataFrame({m: s.reindex(all_dates) for m, s in rmse_dict.items()})
-    df = df.T  # now index=models, columns=dates
+    # --- define a common full index 2017–2024 at input frequency ---
+    # infer the original freq (quarterly or monthly)
+    sample = next(iter(rmse_dict.values()))
+    freq  = pd.infer_freq(sample.index) or 'M'
+    full_dates = pd.date_range(start, end, freq=freq)
 
-    # plot heatmap
+    # --- reindex each series onto the common grid and build DataFrame ---
+    df = pd.DataFrame({m: s.reindex(full_dates) for m, s in rmse_dict.items()})
+    df = df.T  # rows=models, cols=dates
+
+    # --- mask NaNs so they appear white ---
+    data = np.ma.masked_invalid(df.values)
+    cmap = plt.get_cmap('viridis', 256)
+    cmap.set_bad(color='white')  # masked→white
+
+    # --- plot with a true date axis ---
     fig, ax = plt.subplots(figsize=(12, len(df)*0.5 + 1))
-    c = ax.imshow(df.values, aspect='auto', interpolation='none')
+    # convert dates to matplotlib floats
+    mdates_vals = mdates.date2num(full_dates.to_pydatetime())
+    extent = [mdates_vals[0], mdates_vals[-1], 0, len(df)]
+    im = ax.imshow(
+        data,
+        aspect='auto',
+        interpolation='nearest',
+        cmap=cmap,
+        extent=extent,
+        origin='lower',
+    )
+
+    # y-axis labels
     ax.set_yticks(np.arange(len(df.index)))
     ax.set_yticklabels(df.index)
-    ax.set_xticks(np.arange(len(df.columns)))
-    ax.set_xticklabels([d.strftime('%Y-%m') for d in df.columns], rotation=90, fontsize=8)
+
+    # x-axis: only years
+    ax.xaxis_date()
+    ax.xaxis.set_major_locator(mdates.YearLocator())      # every Jan.1st
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    ax.set_xlim([mdates_vals[0], mdates.date2num(pd.Timestamp(end))])
+
     ax.set_title(title)
-    fig.colorbar(c, ax=ax, label='RMSE')
+    fig.colorbar(im, ax=ax, label='RMSE')
     plt.tight_layout()
     plt.show()
+    
+    
+    #%%
+def heatmap_on_ax(ax, model_outputs, window=4,
+                  start='2017-01-01', end='2024-12-31', title=''):
+    """Internal: computes rolling RMSE and plots onto provided Axes."""
+    # Compute rolling RMSE series
+    rmse_dict = {}
+    for name, (acts, preds, dates) in model_outputs.items():
+        acts = np.array(acts)
+        preds = np.array(preds)
+        idx = pd.to_datetime(dates[-len(acts):])
+        errs = acts - preds
+        rmse = (pd.Series(errs**2, index=idx)
+                   .rolling(window=window, min_periods=1)
+                   .mean()**0.5)
+        rmse_dict[name] = rmse
+
+    # Common full index
+    sample = next(iter(rmse_dict.values()))
+    freq = pd.infer_freq(sample.index) or 'M'
+    full_dates = pd.date_range(start, end, freq=freq)
+
+    # Build reindexed DataFrame
+    df = pd.DataFrame({m: s.reindex(full_dates) for m, s in rmse_dict.items()})
+    df = df.T  # rows=models, cols=dates
+
+    # Mask NaNs
+    data = np.ma.masked_invalid(df.values)
+    cmap = plt.get_cmap('viridis', 256)
+    cmap.set_bad(color='white')
+
+    # Plot heatmap onto the given axes
+    mdates_vals = mdates.date2num(full_dates.to_pydatetime())
+    extent = [mdates_vals[0], mdates_vals[-1], 0, len(df)]
+    im = ax.imshow(
+        data, aspect='auto', interpolation='nearest',
+        cmap=cmap, extent=extent, origin='lower'
+    )
+
+    ax.set_yticks(np.arange(len(df.index)))
+    ax.set_yticklabels(df.index, fontsize=8)
+    ax.set_title(title, fontsize=10)
+
+    ax.xaxis_date()
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    ax.set_xlim(extent[0], extent[1])
+
+    return im
+
+def plot_country_rolling_rmse(country,
+                              gdp_epu, gdp_figas, gdp_ashwin,
+                              inf_epu, inf_figas, inf_ashwin,
+                              window=4, start='2017-01-01', end='2024-12-31'):
+    fig, axes = plt.subplots(3, 2, figsize=(14, 12), sharex='col')
+    # Top row: EPU
+    heatmap_on_ax(axes[0,0], gdp_epu, window, start, end, title=f"EPU GDP")
+    heatmap_on_ax(axes[0,1], inf_epu, window, start, end, title=f"EPU Inflation")
+    # Middle: FIGAS
+    heatmap_on_ax(axes[1,0], gdp_figas, window, start, end, title=f"FIGAS GDP")
+    heatmap_on_ax(axes[1,1], inf_figas, window, start, end, title=f"FIGAS Inflation")
+    # Bottom: Ashwin
+    heatmap_on_ax(axes[2,0], gdp_ashwin, window, start, end, title=f"Ashwin GDP")
+    heatmap_on_ax(axes[2,1], inf_ashwin, window, start, end, title=f"Ashwin Inflation")
+
+    fig.suptitle(f"Rolling RMSE Heatmaps for {country}", fontsize=14)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()
+
