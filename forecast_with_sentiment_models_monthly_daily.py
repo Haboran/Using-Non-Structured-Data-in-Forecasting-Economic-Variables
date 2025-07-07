@@ -344,6 +344,38 @@ def forecast_with_sentiment_models_md(series, sentiment_df_monthly, sentiment_df
         eval_dates_r.append(df_r_full.index[i + H - 1])
     rmse_r_midas = np.sqrt(mean_squared_error(acts_r, preds_r))
     
+    
+    # --- ALIGN ALL MODELS TO THE SHORTEST SERIES ---
+    models = {
+        "ARIMA":     {"acts": acts_arima,   "preds": preds_arima,   "dates": eval_dates_arima},
+        "ARIMAX":    {"acts": acts_arimax,  "preds": preds_arimax,  "dates": eval_dates_arimax},
+        "U-MIDAS":   {"acts": acts_mid,     "preds": preds_mid,     "dates": eval_dates_mid},
+        "LASSO":     {"acts": acts_lasso,   "preds": preds_lasso,   "dates": eval_dates_lasso},
+        "RF":        {"acts": acts_rf,      "preds": preds_rf,      "dates": dates_rf},
+        "MIDAS-Net": {"acts": acts_mlp,     "preds": preds_mlp,     "dates": dates_mlp},
+        "r-MIDAS":   {"acts": acts_r,       "preds": preds_r,       "dates": eval_dates_r},
+    }
+
+    # 1) find the minimum length among all preds
+    min_len = min(len(v["preds"]) for v in models.values())
+
+    # 2) truncate each series to its last min_len points
+    for v in models.values():
+        v["acts"]  = np.array(v["acts"])[-min_len:]
+        v["preds"] = np.array(v["preds"])[-min_len:]
+        v["dates"] = v["dates"][-min_len:]
+
+    # 3) reassign back to your variables
+    acts_arima,   preds_arima,   eval_dates_arima   = models["ARIMA"].values()
+    acts_arimax,  preds_arimax,  eval_dates_arimax  = models["ARIMAX"].values()
+    acts_mid,     preds_mid,     eval_dates_mid     = models["U-MIDAS"].values()
+    acts_lasso,   preds_lasso,   eval_dates_lasso   = models["LASSO"].values()
+    acts_rf,      preds_rf,      dates_rf           = models["RF"].values()
+    acts_mlp,     preds_mlp,     dates_mlp          = models["MIDAS-Net"].values()
+    acts_r,       preds_r,       eval_dates_r       = models["r-MIDAS"].values()
+
+    
+    
     # Collect all model predictions aligned on ARIMA evaluation dates
     all_preds = {
         "ARIMA":      np.array(preds_arima),
@@ -356,31 +388,46 @@ def forecast_with_sentiment_models_md(series, sentiment_df_monthly, sentiment_df
     }
     acts = np.array(acts_arima)  # use ARIMA acts as reference
 
-    # Define three unweighted combinations
+    # Define your combos
     unw_combos = {
         "Comb1_ARIMA_ARIMAX_RF":    ["ARIMA", "ARIMAX", "RF"],
-        "Comb2_UMIDAS_LASSO_RF":    ["U-MIDAS", "LASSO", "ARIMA"],
-        "Comb3_MLP_RMIDAS_ARIMA":   ["LASSO", "r-MIDAS", "RF"]
+        "Comb2_UMIDAS_LASSO_ARIMA":    ["U-MIDAS", "LASSO", "ARIMA"],
+        "Comb3_LASSO_RMIDAS_RF":   ["LASSO", "r-MIDAS", "RF"]
     }
 
-    comb_rmse = {}
     comb_preds = {}
+    comb_rmse  = {}
+    comb_dates = {}
+
     for name, members in unw_combos.items():
-        # gather each model's predictions
-        arrs = [all_preds[m] for m in members]
-        # find the shortest series
-        min_len = min(arr.shape[0] for arr in arrs)
-        # take only the last min_len points of each
-        aligned = [arr[-min_len:] for arr in arrs]
-
-        stack = np.vstack(aligned)
-        avg_pred = stack.mean(axis=0)
-
-        # align acts to the same tail‐end window
-        aligned_acts = acts[-min_len:]
-
-        comb_preds[name] = avg_pred
-        comb_rmse[name]  = np.sqrt(mean_squared_error(aligned_acts, avg_pred))
+        # 1) grab each member’s raw preds array
+        arrs = [ np.array(all_preds[m]) for m in members ]
+        # 2) find the shortest length
+        min_len = min(a.shape[0] for a in arrs)
+        # 3) truncate *all* to that tail‐end window
+        aligned_preds = [a[-min_len:] for a in arrs]
+            
+        # 4) build the stack & average
+        stack = np.vstack(aligned_preds)
+        avg   = stack.mean(axis=0)
+    
+        # 5) align the actuals and the dates
+        acts_trim   = acts[-min_len:]
+        dates_trim  = np.array(eval_dates_arima)[-min_len:]
+    
+        # 6) store
+        comb_preds[name] = avg
+        comb_rmse[name]  = np.sqrt(mean_squared_error(acts_trim, avg))
+        comb_dates[name] = dates_trim
+    
+    # Build your model_outputs dict for plotting
+    combo_model_outputs = {}
+    for name in comb_preds:
+        combo_model_outputs[name + ' (unw)'] = (
+            acts[-len(comb_preds[name]):],
+            comb_preds[name],
+            comb_dates[name]
+        )
 
     # Define inverse-RMSE weighted combinations
     ind_rmse = {
@@ -392,23 +439,32 @@ def forecast_with_sentiment_models_md(series, sentiment_df_monthly, sentiment_df
         "MIDAS-Net": rmse_mlp,
         "r-MIDAS": rmse_r_midas
     }
-    wtd_rmse = {}
-    wtd_preds = {}
+    wtd_preds  = {}
+    wtd_rmse   = {}
+    wtd_dates  = {}
+    
     for name, members in unw_combos.items():
-        arrs = [all_preds[m] for m in members]
-        min_len = min(arr.shape[0] for arr in arrs)
-        aligned = [arr[-min_len:] for arr in arrs]
-
-        inv     = np.array([1.0 / ind_rmse[m] for m in members])
+        # 1) grab each model’s raw preds
+        arrs = [np.array(all_preds[m]) for m in members]
+        # 2) compute the common tail‐end length
+        min_len = min(a.shape[0] for a in arrs)
+        # 3) truncate each
+        aligned = [a[-min_len:] for a in arrs]
+    
+        # 4) build weights & weighted stack
+        inv     = np.array([1.0/ind_rmse[m] for m in members])
         weights = inv / inv.sum()
-
-        stack = np.vstack(aligned)
-        wpred = (weights[:, None] * stack).sum(axis=0)
-
-        aligned_acts = acts[-min_len:]
-
+        stack   = np.vstack(aligned)
+        wpred   = (weights[:, None] * stack).sum(axis=0)
+        
+        # 5) align acts & dates
+        acts_trim  = acts[-min_len:]
+        dates_trim = np.array(eval_dates_arima)[-min_len:]
+    
+        # 6) store
         wtd_preds[name] = wpred
-        wtd_rmse[name]  = np.sqrt(mean_squared_error(aligned_acts, wpred))
+        wtd_rmse[name]  = np.sqrt(mean_squared_error(acts_trim, wpred))
+        wtd_dates[name] = dates_trim
         
     # Rolling RMSE plot
     model_outputs = {
@@ -423,10 +479,20 @@ def forecast_with_sentiment_models_md(series, sentiment_df_monthly, sentiment_df
         
     # Rolling RMSE for combined models
     combo_outputs = {}
-    for name in comb_preds:
-        combo_outputs[name + ' (unw)'] = (acts, comb_preds[name], eval_dates_arima)
-    for name in wtd_preds:
-        combo_outputs[name + ' (wtd)'] = (acts, wtd_preds[name], eval_dates_arima)
+    for name, preds in comb_preds.items():
+        n = len(preds)
+        combo_outputs[name + ' (unw)'] = (
+            acts[-n:],               # last n actuals
+            preds,                   # your n preds
+            eval_dates_arima[-n:]    # last n dates
+        )
+    for name, preds in wtd_preds.items():
+        n = len(preds)
+        combo_outputs[name + ' (wtd)'] = (
+            acts[-n:],
+            preds,
+            eval_dates_arima[-n:]
+        )
         
         
     # Plotting
@@ -455,10 +521,14 @@ def forecast_with_sentiment_models_md(series, sentiment_df_monthly, sentiment_df
         plt.plot(eval_dates_arima, acts_arima, '-', color='black', linewidth=1.5, label='Actual')
         # Unweighted
         for name, pred in comb_preds.items():
-            plt.plot(eval_dates_arima, pred, linestyle='-', label=f'{name} (unw)')
-        # Weighted
+            dates = eval_dates_arima[-len(pred):]      # only the last N dates
+            plt.plot(dates, pred, linestyle='-', label=f'{name} (unw)')
+
+        # --- plot weighted combos, same alignment ---
         for name, pred in wtd_preds.items():
-            plt.plot(eval_dates_arima, pred, linestyle='--', label=f'{name} (wtd)')
+            dates = eval_dates_arima[-len(pred):]
+            plt.plot(dates, pred, linestyle='--', label=f'{name} (wtd)')
+            
         plt.title(f"Combined Forecasts vs Actuals H={H} - {country_code}")
         plt.xlabel("Date")
         plt.ylabel("Log-diff GDP")

@@ -42,6 +42,7 @@ from forecast_with_sentiment_models_monthly_daily import forecast_with_sentiment
 from forecast_with_sentiment_models_monthly_monthly import forecast_with_sentiment_models_mm
 from Functions import get_top_2_sentiments
 from Functions import plot_country_rolling_rmse
+from Functions import heatmap_on_ax
 
 #%%
 # Utility function for transforming time series data
@@ -68,7 +69,8 @@ def transform_series(series, method='log_diff'):
 
 
 #%% 
-
+#  Forecast horizon:
+h = 1
 
 '''     Target macro variables     '''
 
@@ -469,7 +471,7 @@ plt.show()
 sentiment_df = pd.read_csv(r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Data\Barbaglia, L., Consoli, S., & Manzan, S. (2024)\eu_sentiments.csv", parse_dates=['date'])
 
 # Set up
-country_codes = {'Germany': 'DE', 'France': 'FR', 'Spain': 'ES', 'Italy': 'IT', 'United Kingdom': 'UK'}
+country_codes = {'Germany': 'DE', 'France': 'FR', 'Spain': 'ES', 'Italy': 'IT'}
 focus_sets = {
     "Germany": ['Germany'],
     "France": ['France'],
@@ -632,14 +634,14 @@ gdp_cutoff = pd.to_datetime("2022-06-30")
 wage_cutoff = pd.to_datetime("2022-06-30")
 
 # Trim GDP and wage data
-gdp_data = gdp_data[gdp_data.index < gdp_cutoff]
+gdp_data_tmp = gdp_data[gdp_data.index < gdp_cutoff]
 wage_data = wage_data[wage_data.index < wage_cutoff]
 
 for country in gdp_data.columns:
     print(f"\n>>> {country} <<<")
-    country = 'Germany'
+    
     # Transform GDP to log-diff
-    series = transform_series(gdp_data[country], method='log_diff')
+    series = transform_series(gdp_data_tmp[country], method='log_diff')
     # Map country to code
     country_map = {'Germany': 'DE', 'France': 'FR', 'Spain': 'ES', 'Italy': 'IT'}
     country_code = country_map.get(country)
@@ -683,7 +685,7 @@ for country in gdp_data.columns:
         sentiment_vars=top2,
         sentiment_cols=sentiment_cols,
         order=arima_order,
-        forecast_horizon=1,
+        forecast_horizon=h,
         plot=True
     )
 
@@ -749,7 +751,7 @@ for country in inf_data.columns:
         sentiment_cols=['economy','financial sector','inflation',
                         'manufacturing','monetary policy','unemployment'],
         order=order,
-        forecast_horizon=1,
+        forecast_horizon=h,
         plot=True
     )
 
@@ -762,7 +764,7 @@ for country in inf_data.columns:
 #%%  Evaluate with EPU from 1997-01 to 2024-10
 ''' GDP EPU'''
 # 1) Trim GDP to 1997-01-01…2024-10-01
-gdp_data = gdp_data.loc["1997-01-01":"2024-07-01"]
+gdp_data_tmp = gdp_data.loc["1997-01-01":"2024-07-01"]
 
 # 2) Trim EPU series loaded earlier
 epu_monthly = epu_monthly.loc["1997-01-01":"2024-10-01"]        # ISO codes as columns: 'DE','FR','ES','IT',…
@@ -784,12 +786,13 @@ all_combo_outputs_gdp_epu = {}
 
 country_map = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
 for country, code in country_map.items():
+    print(f"\n>>> {country} <<<")
     if country not in gdp_data:
         continue
 
     # 4) Slice GDP series by country-specific EPU start
     start = "2001-01-01" if code=="ES" else "1997-01-01"
-    series = gdp_data[country].loc[start:"2024-10-01"].dropna()
+    series = gdp_data_tmp[country].loc[start:"2024-10-01"].dropna()
     series = transform_series(series, method="log_diff")
 
     # 5) Prepare EPU DataFrames for this country:
@@ -815,7 +818,7 @@ for country, code in country_map.items():
         sentiment_vars=["EPU"],    # only one high-freq indicator
         sentiment_cols=["EPU"],    # likewise for Lasso/RF
         order=(1,0,1),             # or your auto_arima order
-        forecast_horizon=1,
+        forecast_horizon=h,
         plot=True
     )
 
@@ -886,7 +889,7 @@ for country, code in country_map.items():
         sentiment_vars=["EPU"],      # for ARIMAX / DL
         sentiment_cols=["EPU"],      # for LASSO / RF
         order=order,
-        forecast_horizon=1,
+        forecast_horizon=h,
         lags=1,
         plot=True
     )
@@ -903,7 +906,7 @@ for country, code in country_map.items():
 ''' GDP Ashwin'''
 # 4) Filter to your common sentiment sample 2002-01-02 → 2020-10-01
 sent_start = pd.to_datetime("2002-01-02")
-sent_end   = pd.to_datetime("2020-10-01")
+sent_end   = pd.to_datetime("2020-01-01")
 
 ashwin_daily_sent_filt = ashwin_daily_country_sentiment_df[
     (ashwin_daily_country_sentiment_df['date'] >= sent_start) &
@@ -916,40 +919,42 @@ ashwin_quarterly_sent_filt = ashwin_quarterly_country_sentiment_df[
 ].copy()
 
 # 5) Trim your GDP data
-gdp_cutoff = pd.to_datetime("2020-10-01")
-gdp_data   = gdp_data[gdp_data.index < gdp_cutoff]
+gdp_cutoff = pd.to_datetime("2020-01-01")
+gdp_data_tmp   = gdp_data[gdp_data.index < gdp_cutoff]
 
 # 6) Now your loop, selecting top-2 by quarterly correlation of the raw *_sum_<cc> names
-all_summary_rmse_gdp_ashwin = {}
-all_raw_outputs_gdp_ashwin   = {}
-all_combo_outputs_gdp_ashwin = {}
+# --- GDP Ashwin: loop over each sentiment individually ---
+all_summary_rmse_gdp_ashwin_indiv = {}
+all_raw_outputs_gdp_ashwin_indiv   = {}
+all_combo_outputs_gdp_ashwin_indiv = {}
 
-country_map       = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
+sentiments = sentiment_cols_ashwin.copy()         # ['loughran','stability','afinn','vader','econlex']
+country_map = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
 
 for country in gdp_data.columns:
-    print(f"\n>>> {country} <<<")
-    
-    # 1) Load & transform GDP
-    series = transform_series(gdp_data[country], method='log_diff').dropna()
-    
-    # 2) **Trim to sentiment sample window**:
-    series = series[(series.index >= sent_start) & (series.index <= sent_end)]
-    
-    code   = country_map.get(country)
-    if code is None:
+    print(f"\n>>> {country} — Ashwin (individual sentiments) <<<")
+    # 1) log-diff transform & trim to your sentiment window
+    series = (
+        transform_series(gdp_data_tmp[country], method='log_diff')
+        .dropna()
+        .loc[sent_start:sent_end]
+    )
+
+    code = country_map.get(country)
+    if not code:
         continue
 
-    # 3) Local copies of filtered sentiments
+    # 2) local copies of Ashwin sentiment
     qs = ashwin_quarterly_sent_filt.copy()
     ds = ashwin_daily_sent_filt.copy()
 
-    # 4) Italy’s later start
+    # 3) Italy’s later start
     if country == "Italy":
-        series = series[series.index >= "1997-01-01"]
+        series = series.loc["1997-01-01":]
         qs     = qs[qs['quarter'] >= pd.Period("1996Q3")]
         ds     = ds[ds['date']   >= pd.to_datetime("1996-09-05")]
 
-    # 5) auto_arima
+    # 4) pick ARIMA order on the truncated series
     try:
         m = auto_arima(series, seasonal=False, stepwise=True,
                        max_p=8, max_d=2, max_q=8,
@@ -958,27 +963,25 @@ for country in gdp_data.columns:
     except:
         arima_order = (1,0,1)
 
-    # 6) Pick top‐2 Ashwin sentiments (raw names) for this country
-    top2 = get_top_2_sentiments(code, series, qs, sentiment_cols_ashwin)
-    print(f"{country}: Best sentiment vars = {top2}")
+    # 5) loop through each sentiment one by one
+    for sent in sentiments:
+        print(f"  → Sentiment = {sent}")
+        results = forecast_with_sentiment_models_qd(
+            series=series,
+            sentiment_df_quarterly=qs,
+            sentiment_df_daily=ds,
+            country_code=code,
+            sentiment_vars=[sent],      # only this one
+            sentiment_cols=[sent],      # for Lasso/RF use the same single
+            order=arima_order,
+            forecast_horizon=h,
+            plot=True
+        )
 
-    # 7) Forecast
-    results = forecast_with_sentiment_models_qd(
-        series=series,
-        sentiment_df_quarterly=qs,
-        sentiment_df_daily=ds,
-        country_code=code,
-        sentiment_vars=top2,
-        sentiment_cols=sentiment_cols_ashwin,
-        order=arima_order,
-        forecast_horizon=1,
-        plot=True
-    )
-
-    print(f"{country} RMSEs: {results['summary_rmse']}")
-    all_summary_rmse_gdp_ashwin[country] = results['summary_rmse']
-    all_raw_outputs_gdp_ashwin[country]   = results['raw_outputs']
-    all_combo_outputs_gdp_ashwin[country] = results['combo_outputs']
+        # 6) store under nested dicts
+        all_summary_rmse_gdp_ashwin_indiv.setdefault(country, {})[sent] = results['summary_rmse']
+        all_raw_outputs_gdp_ashwin_indiv.setdefault(country, {})[sent]   = results['raw_outputs']
+        all_combo_outputs_gdp_ashwin_indiv.setdefault(country, {})[sent] = results['combo_outputs']
     
     
 #%%
@@ -986,9 +989,9 @@ for country in gdp_data.columns:
 ''' Inf Ashwin'''
 # 4) Filter to your common sentiment sample 2002-01-02 → 2020-10-01
 sent_start = pd.to_datetime("2002-01-02")
-sent_end   = pd.to_datetime("2020-10-01")
+sent_end   = pd.to_datetime("2020-01-01")
 
-cutoff = pd.to_datetime("2020-10-01")
+cutoff = pd.to_datetime("2020-01-01")
 
 inf_data = df_inf[df_inf.index < cutoff]
 
@@ -1009,36 +1012,36 @@ ashwin_daily = ashwin_daily_country_sentiment_df[
     (ashwin_daily_country_sentiment_df['date'] <= sent_end)
 ].copy()
 
-all_summary_rmse_inf_ashwin = {}
-all_raw_outputs_inf_ashwin   = {}
-all_combo_outputs_inf_ashwin = {}
-
-country_map = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
+# --- Inf Ashwin: loop over each sentiment individually ---
+all_summary_rmse_inf_ashwin_indiv = {}
+all_raw_outputs_inf_ashwin_indiv  = {}
+all_combo_outputs_inf_ashwin_indiv = {}
 
 for country in inf_data.columns:
-    print(f"\n>>> {country} <<<")
-    series = inf_data[country].dropna()
-    
-    # 2) **Trim to sentiment sample window**:
-    series = series[(series.index >= sent_start) & (series.index <= sent_end)]
-    
-    
-    code   = country_map.get(country)
+    print(f"\n>>> {country} — Ashwin (individual sentiments) <<<")
+    # 1) Build & trim your inflation series
+    series = (
+        inf_data[country]
+        .dropna()
+        .loc[sent_start:sent_end]
+    )
+
+    code = country_map.get(country)
     if code is None:
         continue
 
-    # Local copies for this country
+    # 2) Local copies of Ashwin sentiment
     ms = ashwin_monthly.copy()
     ds = ashwin_daily.copy()
 
-    # Italy has later coverage
+    # 3) Italy: align to its later coverage
     if country == "Italy":
-        print(" Italy: trimming to match sentiment coverage")
-        series = series[series.index >= pd.to_datetime("1997-01-01")]
+        print("  Italy: trimming to match sentiment coverage")
+        series = series.loc["1997-01-01":]
         ms     = ms[ms['date'] >= pd.to_datetime("1996-09-30")]
         ds     = ds[ds['date'] >= pd.to_datetime("1996-09-05")]
 
-    # 2) Auto-ARIMA on inflation
+    # 4) Auto-ARIMA on the (trimmed) inflation series
     try:
         am    = auto_arima(series, seasonal=False, stepwise=True,
                            error_action='ignore', suppress_warnings=True,
@@ -1047,28 +1050,448 @@ for country in inf_data.columns:
     except:
         order = (1,0,1)
 
-    # 3) Pick top-2 Ashwin sentiments for this country
-    top2 = get_top_2_sentiments(code, series, ms, sentiment_cols_ashwin)
-    print(f"{country}: Best sentiment vars = {top2}")
+    # 5) Loop through each Ashwin sentiment one by one
+    for sent in sentiment_cols_ashwin:
+        print(f"  → Sentiment = {sent}")
+        results = forecast_with_sentiment_models_md(
+            series             = series,
+            sentiment_df_monthly = ms,
+            sentiment_df_daily   = ds,
+            country_code       = code,
+            sentiment_vars     = [sent],      # only this one
+            sentiment_cols     = [sent],      # same for Lasso/RF
+            order              = order,
+            forecast_horizon   = h,
+            plot               = True
+        )
 
-    # 4) Run your monthly/daily forecast function
+        # 6) Store under nested dicts: country → sentiment
+        all_summary_rmse_inf_ashwin_indiv.setdefault(country, {})[sent] = results['summary_rmse']
+        all_raw_outputs_inf_ashwin_indiv.setdefault(country, {})[sent]  = results['raw_outputs']
+        all_combo_outputs_inf_ashwin_indiv.setdefault(country, {})[sent] = results['combo_outputs']
+
+
+    
+#%%
+''' Pre covid    GDP FIGAS'''
+
+# --- GDP Figas: mixed-frequency models on pre-COVID data ---
+all_summary_rmse_gdp_figas_pre_covid = {}
+all_raw_outputs_gdp_figas_pre_covid   = {}
+all_combo_outputs_gdp_figas_pre_covid = {}
+
+# define pre-COVID cutoff (up to end of 2019)
+gdp_pre_covid_cutoff = pd.to_datetime("2020-01-01")
+gdp_data_pre_covid   = gdp_data[gdp_data.index < gdp_pre_covid_cutoff]
+
+for country in gdp_data.columns:
+    print(f"\n>>> {country} <<<")
+    
+    # Transform GDP to log-diff
+    series = transform_series(gdp_data_pre_covid[country], method='log_diff')
+    # Map country to code
+    country_map = {'Germany': 'DE', 'France': 'FR', 'Spain': 'ES', 'Italy': 'IT'}
+    country_code = country_map.get(country)
+    if not country_code:
+        continue
+
+    # --- make local copies of your sentiment dataframes ---
+    qs = quarterly_sentiment.copy()
+    sp = sentiment_pivot.copy()
+
+    # Adjust start dates ONLY for Italy due to sentiment coverage
+    if country == "Italy":
+        print(f"{country}: Adjusting sample start due to sentiment coverage")
+        series = series[series.index >= pd.to_datetime("1997-01-01")]
+        qs = qs[qs['quarter'] >= pd.Period("1996Q3")]
+        sp = sp[sp['date']   >= pd.to_datetime("1996-09-05")]
+
+    # Estimate ARIMA order
+    try:
+        model = auto_arima(series.dropna(), max_p=8, max_d=2, max_q=8,
+                            seasonal=False, stepwise=True,
+                            error_action='ignore', suppress_warnings=True)
+        arima_order = model.order
+    except:
+        arima_order = (1, 0, 1)
+
+    # Select top 2 sentiment variables (for ARIMAX / MIDAS)
+    top2 = get_top_2_sentiments(country_code, series, qs, sentiment_cols)
+    print(f"{country}: Best sentiment topics = {top2}")
+
+    # All sentiment topics (for Lasso)
+    sentiment_cols = ['economy', 'financial sector', 'inflation',
+                      'manufacturing', 'monetary policy', 'unemployment']
+
+    # Run all models, passing the *local* qs & sp
+    results_pre = forecast_with_sentiment_models_qd(
+        series=series,
+        sentiment_df_quarterly=qs,
+        sentiment_df_daily=sp,
+        country_code=country_code,
+        sentiment_vars=top2,
+        sentiment_cols=sentiment_cols,
+        order=arima_order,
+        forecast_horizon=h,
+        plot=True
+    )
+
+    # 8) store under new dict names
+    print(f"{country} RMSEs: {results['summary_rmse']}")
+    all_summary_rmse_gdp_figas_pre_covid[country] = results_pre['summary_rmse']
+    all_raw_outputs_gdp_figas_pre_covid[country]   = results_pre['raw_outputs']
+    all_combo_outputs_gdp_figas_pre_covid[country] = results_pre['combo_outputs']
+    
+    
+    
+#%%    
+'''  Inf Figas'''
+
+# --- Inf Figas: monthly/daily models on pre-COVID data ---
+all_summary_rmse_inf_figas_pre_covid = {}
+all_raw_outputs_inf_figas_pre_covid   = {}
+all_combo_outputs_inf_figas_pre_covid = {}
+
+# define cutoff for pre-COVID (up through 2019)
+inf_pre_covid_cutoff = pd.to_datetime("2020-01-01")
+
+# truncate your target & sentiment dfs
+inf_data_pre_covid = df_inf[df_inf.index < inf_pre_covid_cutoff]
+msent_pre_covid   = monthly_sentiment[monthly_sentiment['date'] < inf_pre_covid_cutoff]
+dsent_pre_covid   = sentiment_pivot[sentiment_pivot['date'] < inf_pre_covid_cutoff]
+
+country_map = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
+
+for country in inf_data_pre_covid.columns:
+    print(f"\n>>> {country} <<<")
+    series = inf_data_pre_covid[country].dropna()
+    # Map to code
+    code = country_map.get(country)
+    if code is None:
+        continue
+
+    # For Italy: align start date if necessary
+    ms = msent.copy()
+    ds = dsent.copy()
+    if country == "Italy":
+        print(" Italy: trimming to match sentiment coverage")
+        series = series[series.index >= pd.to_datetime("1997-01-01")]
+        ms     = msent_pre_covid[msent_pre_covid['date'] >= pd.to_datetime("1996-09-30")]
+        ds     = dsent_pre_covid[dsent_pre_covid['date'] >= pd.to_datetime("1996-09-05")]
+
+    # 1) Fit auto_arima to pick (p,d,q) on the inflation series
+    try:
+        am = auto_arima(series, seasonal=False, stepwise=True,
+                        error_action='ignore', suppress_warnings=True,
+                        max_p=8, max_d=2, max_q=8)
+        order = am.order
+    except:
+        order = (1,0,1)
+
+    # 2) Pick your top-2 sentiment topics however you like; here we just hardcode two:
+    top2 = get_top_2_sentiments(code, series, ms, sentiment_cols)
+    print(f"{country}: Best sentiment topics = {top2}")
+    
+    # 3) Call the monthly/daily function
     results = forecast_with_sentiment_models_md(
         series=series,
         sentiment_df_monthly=ms,
         sentiment_df_daily=ds,
         country_code=code,
         sentiment_vars=top2,
-        sentiment_cols=sentiment_cols_ashwin,
+        sentiment_cols=['economy','financial sector','inflation',
+                        'manufacturing','monetary policy','unemployment'],
         order=order,
-        forecast_horizon=1,
+        forecast_horizon=h,
         plot=True
     )
 
+    # 8) store under new dicts
     print(f"{country} RMSEs: {results['summary_rmse']}")
-    all_summary_rmse_inf_ashwin[country] = results['summary_rmse']
-    all_raw_outputs_inf_ashwin[country]   = results['raw_outputs']
-    all_combo_outputs_inf_ashwin[country] = results['combo_outputs']
+    all_summary_rmse_inf_figas_pre_covid[country] = results_pre['summary_rmse']
+    all_raw_outputs_inf_figas_pre_covid[country]   = results_pre['raw_outputs']
+    all_combo_outputs_inf_figas_pre_covid[country] = results_pre['combo_outputs']
 
+
+#%%
+'''GDP EPU'''
+
+# --- GDP EPU: quarterly–monthly models on pre-COVID data ---
+all_summary_rmse_gdp_epu_pre_covid = {}
+all_raw_outputs_gdp_epu_pre_covid   = {}
+all_combo_outputs_gdp_epu_pre_covid = {}
+
+# define pre-COVID cutoff (up through December 2019)
+gdp_epu_pre_covid_cutoff = pd.to_datetime("2020-01-01")
+
+# truncate your GDP and EPU series
+gdp_data_pre_covid       = gdp_data[gdp_data.index < gdp_epu_pre_covid_cutoff]
+epu_monthly_pre_covid    = epu_monthly[epu_monthly.index < gdp_epu_pre_covid_cutoff]
+epu_quarterly_pre_covid  = epu_quarterly[epu_quarterly['date'] < gdp_epu_pre_covid_cutoff].copy()
+
+country_map = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
+
+for country, code in country_map.items():
+    if country not in gdp_data_pre_covid:
+        continue
+
+    print(f"\n>>> {country} EPU (pre-COVID) <<<")
+
+    # 1) slice & transform GDP
+    start = "2001-01-01" if code == "ES" else "1997-01-01"
+    series = gdp_data_pre_covid[country].loc[start:].dropna()
+    series = transform_series(series, method="log_diff")
+
+    # 2) build country-specific EPU dfs
+    ms = (
+        epu_monthly_pre_covid[[code]]
+        .rename(columns={code: f"{code}_EPU"})
+        .reset_index()
+        .rename(columns={"index":"date"})
+    )
+    qs = (
+        epu_quarterly_pre_covid[["date", code]]
+        .rename(columns={code: f"{code}_EPU"})
+    )
+
+    # 3) run mixed-frequency quarterly–monthly MIDAS
+    results_pre = forecast_with_sentiment_models_qm(
+        series=series,
+        sentiment_df_quarterly=qs,
+        sentiment_df_monthly=ms,
+        country_code=code,
+        sentiment_vars=["EPU"],
+        sentiment_cols=["EPU"],
+        order=(1,0,1),           # or your auto_arima order
+        forecast_horizon=h,
+        plot=True
+    )
+
+    # 4) store under new dicts
+    print(f"{country} RMSEs: {results['summary_rmse']}")
+    all_summary_rmse_gdp_epu_pre_covid[country] = results_pre["summary_rmse"]
+    all_raw_outputs_gdp_epu_pre_covid[country]   = results_pre["raw_outputs"]
+    all_combo_outputs_gdp_epu_pre_covid[country] = results_pre["combo_outputs"]
+
+
+#%%
+'''Inf EPU'''
+
+
+# --- Inf EPU: quarterly–monthly models on pre-COVID data ---
+all_summary_rmse_inf_epu_pre_covid = {}
+all_raw_outputs_inf_epu_pre_covid   = {}
+all_combo_outputs_inf_epu_pre_covid = {}
+
+# define pre-COVID cutoff (up through December 2019)
+inf_epu_pre_covid_cutoff = pd.to_datetime("2020-01-01")
+
+# truncate your inflation and EPU series
+inf_data_pre_covid      = df_inf[df_inf.index < inf_epu_pre_covid_cutoff]
+epu_monthly_pre_covid   = epu_monthly[epu_monthly.index < inf_epu_pre_covid_cutoff]
+epu_quarterly_pre_covid = epu_quarterly[epu_quarterly['date'] < inf_epu_pre_covid_cutoff].copy()
+
+country_map = {'Germany':'DE','France':'FR','Spain':'ES','Italy':'IT'}
+
+for country, code in country_map.items():
+    if country not in gdp_data:
+        continue
+
+    print(f"\n>>> {country} <<<")
+    # 1) Definiere deine beiden Grenzen
+    start = "2001-01-01" if code=="ES" else "1997-01-01"
+    sent_start = pd.to_datetime(start)
+    sent_end   = pd.to_datetime("2020-01-01")
+    
+    # 2) Baue die Ziel‐Serie y so, dass sie nur in diesem Intervall lebt
+    y = inf_data[country].dropna().copy()
+    # auf Monatsende verschieben
+    y.index = y.index.to_period('M').to_timestamp() + MonthEnd(0)
+    # nun lower + upper cut
+    y = y.loc[(y.index >= sent_start) & (y.index <= sent_end)]
+    
+    # 3) Baue dein EPU‐DF so, dass es nur in diesem Intervall lebt
+    if 'date' in epu_monthly.columns:
+        ms = epu_monthly[['date', code]].copy()
+    else:
+        ms = epu_monthly.reset_index().rename(columns={'index':'date'})[['date', code]].copy()
+    ms['date'] = pd.to_datetime(ms['date']) + MonthEnd(0)
+    ms = ms.rename(columns={code: f"{code}_EPU"})
+    ms = ms.loc[(ms['date'] >= sent_start) & (ms['date'] <= sent_end)]
+    
+    # 4) Intersection (eigentlich überflüssig, weil du schon beschnitten hast)
+    common = y.index.intersection(ms['date'])
+    y      = y.loc[common]
+    ms     = ms[ms['date'].isin(common)].copy()
+
+    try:
+        am = auto_arima(y, seasonal=False, stepwise=True,
+                        error_action='ignore', suppress_warnings=True,
+                        max_p=8, max_d=2, max_q=8)
+        order = am.order
+    except:
+        order = (1,0,1)
+
+    # d) Call the monthly–monthly function
+    results = forecast_with_sentiment_models_mm(
+        series=y,
+        sentiment_df_monthly=ms,
+        country_code=code,
+        sentiment_vars=["EPU"],      # for ARIMAX / DL
+        sentiment_cols=["EPU"],      # for LASSO / RF
+        order=order,
+        forecast_horizon=h,
+        lags=1,
+        plot=True
+    )
+
+    # 5) store under new dicts
+    print(f"{country} RMSEs: {results['summary_rmse']}")
+    all_summary_rmse_inf_epu_pre_covid[country] = results_pre["summary_rmse"]
+    all_raw_outputs_inf_epu_pre_covid[country]   = results_pre["raw_outputs"]
+    all_combo_outputs_inf_epu_pre_covid[country] = results_pre["combo_outputs"]
+
+#%%
+
+# --- plotting loop ---
+window = 4
+start, end = '2017-01-01', '2019-12-31'
+
+for country in ['Germany', 'France', 'Spain', 'Italy']:
+    fig, axes = plt.subplots(5, 2, figsize=(14, 20), sharex='col')
+
+    # Row 1: EPU
+    heatmap_on_ax(axes[0, 1],
+                  all_raw_outputs_gdp_epu_pre_covid[country],
+                  window, start, end,
+                  title="GDP – EPU (Pre-COVID)")
+    heatmap_on_ax(axes[0, 0],
+                  all_raw_outputs_inf_epu_pre_covid[country],
+                  window, start, end,
+                  title="Inflation – EPU (Pre-COVID)")
+
+    # Row 2: FIGAS
+    heatmap_on_ax(axes[1, 1],
+                  all_raw_outputs_gdp_figas_pre_covid[country],
+                  window, start, end,
+                  title="GDP – FIGAS (Pre-COVID)")
+    heatmap_on_ax(axes[1, 0],
+                  all_raw_outputs_inf_figas_pre_covid[country],
+                  window, start, end,
+                  title="Inflation – FIGAS (Pre-COVID)")
+
+    # Row 3: Ashwin – VADER
+    heatmap_on_ax(axes[2, 1],
+                  all_raw_outputs_gdp_ashwin_indiv[country]['vader'],
+                  window, start, end,
+                  title="GDP – VADER (Pre-COVID)")
+    heatmap_on_ax(axes[2, 0],
+                  all_raw_outputs_inf_ashwin_indiv[country]['vader'],
+                  window, start, end,
+                  title="Inflation – VADER (Pre-COVID)")
+
+    # Row 4: Ashwin – Stability
+    heatmap_on_ax(axes[3, 1],
+                  all_raw_outputs_gdp_ashwin_indiv[country]['stability'],
+                  window, start, end,
+                  title="GDP – Stability (Pre-COVID)")
+    heatmap_on_ax(axes[3, 0],
+                  all_raw_outputs_inf_ashwin_indiv[country]['stability'],
+                  window, start, end,
+                  title="Inflation – Stability (Pre-COVID)")
+
+    # Row 5: Ashwin – EconLex
+    heatmap_on_ax(axes[4, 1],
+                  all_raw_outputs_gdp_ashwin_indiv[country]['econlex'],
+                  window, start, end,
+                  title="GDP – EconLex (Pre-COVID)")
+    heatmap_on_ax(axes[4, 0],
+                  all_raw_outputs_inf_ashwin_indiv[country]['econlex'],
+                  window, start, end,
+                  title="Inflation – EconLex (Pre-COVID)")
+
+    fig.suptitle(f"{country} — Pre-COVID Rolling RMSE Heatmaps", fontsize=16)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.96])
+    plt.show()
+    
+#%%
+
+    
+countries = ["Germany","France","Spain","Italy"]
+tables_single = {}
+
+for country in countries:
+    # grab the four RMSE dicts
+    rmse_gdp_figas = all_summary_rmse_gdp_figas[country]
+    rmse_gdp_epu   = all_summary_rmse_gdp_epu[country]
+    rmse_inf_figas = all_summary_rmse_inf_figas[country]
+    rmse_inf_epu   = all_summary_rmse_inf_epu[country]
+
+    # build DataFrame
+    df = pd.DataFrame({
+        "GDP Figas": pd.Series(rmse_gdp_figas),
+        "GDP EPU":   pd.Series(rmse_gdp_epu),
+        "INF Figas": pd.Series(rmse_inf_figas),
+        "INF EPU":   pd.Series(rmse_inf_epu),
+    })
+
+    tables_single[country] = df
+
+    # LaTeX output
+    print(f"% === {country} — Single-model RMSEs ===")
+    print(df.to_latex(float_format="%.3f",
+                      na_rep="--",
+                      caption=f"Single-model RMSEs for {country}",
+                      label=f"tab:{country.lower()}_rmse_single"))
+    print()
+    
+#%%  
+# define your countries and post-COVID cutoff
+countries = ["Germany", "France", "Spain", "Italy"]
+post_covid = pd.to_datetime("2020-01-01")
+
+for country in countries:
+    # pull in the 4 combo-outputs dicts for this country
+    combos = {
+        "GDP Figas":  all_combo_outputs_gdp_figas[country],
+        "GDP EPU":    all_combo_outputs_gdp_epu[country],
+        "INF Figas":  all_combo_outputs_inf_figas[country],
+        "INF EPU":    all_combo_outputs_inf_epu[country],
+    }
+
+    # compute RMSE for each combo model in each column
+    rmse_table = {}
+    for col, combo_dict in combos.items():
+        rmse_dict = {}
+        for combo_name, (acts, preds, dates) in combo_dict.items():
+            dates = pd.to_datetime(dates)
+            mask  = dates >= post_covid
+
+            a = np.array(acts)[mask]
+            p = np.array(preds)[mask]
+            # align lengths if needed
+            n = min(len(a), len(p))
+            if n > 0:
+                a2 = a[-n:]
+                p2 = p[-n:]
+                rmse = np.sqrt(np.mean((a2 - p2) ** 2))
+            else:
+                rmse = np.nan
+
+            rmse_dict[combo_name] = rmse
+        rmse_table[col] = rmse_dict
+
+    # make DataFrame and print LaTeX
+    df_combo = pd.DataFrame(rmse_table)
+    print(f"% ==== {country} — Combination RMSEs (post-COVID) ====")
+    print(df_combo.to_latex(
+        float_format="%.3f",
+        na_rep="--",
+        caption=f"Post-COVID RMSEs for {country} (model combinations)",
+        label=f"tab:{country.lower()}_rmse_combo",
+        column_format="lcccc"
+    ))
+    print("\n")
 
 #%%
 for country in ['Germany', 'France', 'Spain', 'Italy']:
@@ -1076,10 +1499,10 @@ for country in ['Germany', 'France', 'Spain', 'Italy']:
         country=country,
         gdp_epu=all_raw_outputs_gdp_epu[country],
         gdp_figas=all_raw_outputs_gdp_figas[country],
-        gdp_ashwin=all_raw_outputs_gdp_ashwin[country],
+      #  gdp_ashwin=all_raw_outputs_gdp_ashwin[country],
         inf_epu=all_raw_outputs_inf_epu[country],
         inf_figas=all_raw_outputs_inf_figas[country],
-        inf_ashwin=all_raw_outputs_inf_ashwin[country],
+      #  inf_ashwin=all_raw_outputs_inf_ashwin[country],
         window=4,
         start='2017-01-01',
         end='2024-12-31'
@@ -1090,10 +1513,10 @@ for country in ['Germany', 'France', 'Spain', 'Italy']:
         country=country,
         gdp_epu=all_combo_outputs_gdp_epu[country],
         gdp_figas=all_combo_outputs_gdp_figas[country],
-        gdp_ashwin=all_combo_outputs_gdp_ashwin[country],
+     #   gdp_ashwin=all_combo_outputs_gdp_ashwin[country],
         inf_epu=all_combo_outputs_inf_epu[country],
         inf_figas=all_combo_outputs_inf_figas[country],
-        inf_ashwin=all_combo_outputs_inf_ashwin[country],
+      #  inf_ashwin=all_combo_outputs_inf_ashwin[country],
         window=4,
         start='2017-01-01',
         end='2024-12-31'

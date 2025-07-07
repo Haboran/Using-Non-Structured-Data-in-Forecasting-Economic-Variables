@@ -232,26 +232,26 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
     rmse_rf = np.sqrt(mean_squared_error(acts_rf, preds_rf))
 
 
-    # # === MIDAS-Net (MLP) ===
-    # X_mlp = StandardScaler().fit_transform(X_mid_vals)
-    # preds_mlp, acts_mlp, dates_mlp = [], [], []
-    # train_end_mlp = train_end_mid
+    # === MIDAS-Net (MLP) ===
+    X_mlp = StandardScaler().fit_transform(X_mid_vals)
+    preds_mlp, acts_mlp, dates_mlp = [], [], []
+    train_end_mlp = train_end_mid
     
-    # for i in range(train_end_mlp, len(y_mid_vals) - H + 1):
-    #     mlp = MLPRegressor(
-    #         hidden_layer_sizes=(5,2),
-    #         alpha=0.1,
-    #         early_stopping=True,
-    #         n_iter_no_change=20,
-    #         max_iter=500,
-    #         random_state=0
-    #     )
-    #     mlp.fit(X_mlp[:i], y_mid_vals[:i])
-    #     preds_mlp.append(mlp.predict(X_mlp[i+H-1].reshape(1,-1))[0])
-    #     acts_mlp.append(y_mid_vals[i+H-1])
-    #     dates_mlp.append(valid_mid[i+H-1])
+    for i in range(train_end_mlp, len(y_mid_vals) - H + 1):
+        mlp = MLPRegressor(
+            hidden_layer_sizes=(5,2),
+            alpha=0.1,
+            early_stopping=True,
+            n_iter_no_change=20,
+            max_iter=500,
+            random_state=0
+        )
+        mlp.fit(X_mlp[:i], y_mid_vals[:i])
+        preds_mlp.append(mlp.predict(X_mlp[i+H-1].reshape(1,-1))[0])
+        acts_mlp.append(y_mid_vals[i+H-1])
+        dates_mlp.append(valid_mid[i+H-1])
 
-    # rmse_mlp = np.sqrt(mean_squared_error(acts_mlp, preds_mlp))
+    rmse_mlp = np.sqrt(mean_squared_error(acts_mlp, preds_mlp))
     
     
     # === r-MIDAS with AR lags (direct H-step) ===
@@ -292,6 +292,37 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
         eval_dates_r.append(df_r_full.index[i + H - 1])
     rmse_r_midas = np.sqrt(mean_squared_error(acts_r, preds_r))
     
+    # --- ALIGN ALL MODELS TO THE SHORTEST SERIES ---
+    models = {
+        "ARIMA":     {"acts": acts_arima,   "preds": preds_arima,   "dates": eval_dates_arima},
+        "ARIMAX":    {"acts": acts_arimax,  "preds": preds_arimax,  "dates": eval_dates_arimax},
+        "U-MIDAS":   {"acts": acts_mid,     "preds": preds_mid,     "dates": eval_dates_mid},
+        "LASSO":     {"acts": acts_lasso,   "preds": preds_lasso,   "dates": eval_dates_lasso},
+        "RF":        {"acts": acts_rf,      "preds": preds_rf,      "dates": dates_rf},
+        "MIDAS-Net": {"acts": acts_mlp,     "preds": preds_mlp,     "dates": dates_mlp},
+        "r-MIDAS":   {"acts": acts_r,       "preds": preds_r,       "dates": eval_dates_r},
+    }
+
+    # 1) find the minimum length among all preds
+    min_len = min(len(v["preds"]) for v in models.values())
+
+    # 2) truncate each series to its last min_len points
+    for v in models.values():
+        v["acts"]  = np.array(v["acts"])[-min_len:]
+        v["preds"] = np.array(v["preds"])[-min_len:]
+        v["dates"] = v["dates"][-min_len:]
+
+    # 3) reassign back to your variables
+    acts_arima,   preds_arima,   eval_dates_arima   = models["ARIMA"].values()
+    acts_arimax,  preds_arimax,  eval_dates_arimax  = models["ARIMAX"].values()
+    acts_mid,     preds_mid,     eval_dates_mid     = models["U-MIDAS"].values()
+    acts_lasso,   preds_lasso,   eval_dates_lasso   = models["LASSO"].values()
+    acts_rf,      preds_rf,      dates_rf           = models["RF"].values()
+    acts_mlp,     preds_mlp,     dates_mlp          = models["MIDAS-Net"].values()
+    acts_r,       preds_r,       eval_dates_r       = models["r-MIDAS"].values()
+
+
+
     # Collect all model predictions aligned on ARIMA evaluation dates
     all_preds = {
         "ARIMA":      np.array(preds_arima),
@@ -307,17 +338,28 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
     # Define three unweighted combinations
     unw_combos = {
         "Comb1_ARIMA_ARIMAX_RF":    ["ARIMA", "ARIMAX", "RF"],
-        "Comb2_UMIDAS_LASSO_RF":    ["U-MIDAS", "LASSO", "ARIMA"],
-        "Comb3_MLP_RMIDAS_ARIMA":   ["LASSO", "r-MIDAS", "RF"]
+        "Comb2_UMIDAS_LASSO_ARIMA":    ["U-MIDAS", "LASSO", "ARIMA"],
+        "Comb3_LASSO_RMIDAS_RF":   ["LASSO", "r-MIDAS", "RF"]
     }
 
     comb_rmse = {}
     comb_preds = {}
     for name, members in unw_combos.items():
-        stack = np.vstack([all_preds[m] for m in members])
-        avg_pred = stack.mean(axis=0)
+    # 1. find minimum length among members
+        lengths = [len(all_preds[m]) for m in members]
+        n_min   = min(lengths)
+        
+        # 2. truncate each model’s preds to last n_min points
+        aligned_preds = [np.array(all_preds[m])[-n_min:] for m in members]
+        stack         = np.vstack(aligned_preds)       # now all same shape
+        
+        # 3. align actuals as well
+        acts_arr       = np.array(acts)[-n_min:]
+        
+        # 4. average & compute RMSE
+        avg_pred       = stack.mean(axis=0)
         comb_preds[name] = avg_pred
-        comb_rmse[name] = np.sqrt(mean_squared_error(acts, avg_pred))
+        comb_rmse[name]  = np.sqrt(mean_squared_error(acts_arr, avg_pred))
 
     # Define inverse-RMSE weighted combinations
     ind_rmse = {
@@ -332,12 +374,21 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
     wtd_rmse = {}
     wtd_preds = {}
     for name, members in unw_combos.items():
-        inv = np.array([1.0/ind_rmse[m] for m in members])
-        weights = inv / inv.sum()
-        stack = np.vstack([all_preds[m] for m in members])
-        wpred = (weights[:, None] * stack).sum(axis=0)
+    # 1. same alignment
+        lengths = [len(all_preds[m]) for m in members]
+        n_min   = min(lengths)
+        aligned = [np.array(all_preds[m])[-n_min:] for m in members]
+        stack   = np.vstack(aligned)
+
+        # 2. weights
+        inv      = np.array([1.0/ind_rmse[m] for m in members])
+        weights  = inv / inv.sum()
+
+        # 3. weighted avg & align acts
+        wpred         = (weights[:,None] * stack).sum(axis=0)
+        acts_arr      = np.array(acts)[-n_min:]
         wtd_preds[name] = wpred
-        wtd_rmse[name] = np.sqrt(mean_squared_error(acts, wpred))
+        wtd_rmse[name]  = np.sqrt(mean_squared_error(acts_arr, wpred))
     
     # Rolling RMSE plot
     model_outputs = {
@@ -356,7 +407,6 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
         combo_outputs[name + ' (unw)'] = (acts, comb_preds[name], eval_dates_arima)
     for name in wtd_preds:
         combo_outputs[name + ' (wtd)'] = (acts, wtd_preds[name], eval_dates_arima)
-        
         
     # Plotting
     if plot:
@@ -416,6 +466,7 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
         "U-MIDAS":  rmse_midas,
         "LASSO":    rmse_lasso,
         "RF":       rmse_rf,
+        "MIDAS-Net":  rmse_mlp,
         "r-MIDAS":  rmse_r_midas
     }
 

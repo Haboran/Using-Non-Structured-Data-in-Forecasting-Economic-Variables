@@ -56,6 +56,9 @@ def forecast_with_sentiment_models_mm(
     y.index = y.index.to_period('M').to_timestamp() + MonthEnd(0)
     y = pd.to_numeric(y, errors='coerce').dropna()
     p = order[0]
+    # force at least one AR-lag so p is never zero
+    p = max(p, 1)
+
     H = forecast_horizon
 
     # Split index for rolling
@@ -210,7 +213,38 @@ def forecast_with_sentiment_models_mm(
         eval_dates_r.append(df_r_full.index[i+H-1])
 
     rmse_r_midas = np.sqrt(mean_squared_error(acts_r, preds_r))
+    
+    
+    # --- ALIGN ALL MODELS TO THE SHORTEST SERIES ---
+    models = {
+        "ARIMA":     {"acts": acts_arima,   "preds": preds_arima,   "dates": dates_arima},
+        "ARIMAX":    {"acts": acts_arima,  "preds": preds_arimax,  "dates": dates_arimax},
+        "U-MIDAS":   {"acts": acts_mid,     "preds": preds_mid,     "dates": dates_mid},
+        "LASSO":     {"acts": acts_lasso,   "preds": preds_lasso,   "dates": dates_lasso},
+        "RF":        {"acts": acts_rf,      "preds": preds_rf,      "dates": dates_rf},
+        "MIDAS-Net": {"acts": acts_mlp,     "preds": preds_mlp,     "dates": dates_mlp},
+        "r-MIDAS":   {"acts": acts_r,       "preds": preds_r,       "dates": eval_dates_r},
+    }
 
+    # 1) find the minimum length among all preds
+    min_len = min(len(v["preds"]) for v in models.values())
+
+    # 2) truncate each series to its last min_len points
+    for v in models.values():
+        v["acts"]  = np.array(v["acts"])[-min_len:]
+        v["preds"] = np.array(v["preds"])[-min_len:]
+        v["dates"] = v["dates"][-min_len:]
+
+    # 3) reassign back to your variables
+    acts_arima,   preds_arima,   eval_dates_arima   = models["ARIMA"].values()
+    acts_arimax,  preds_arimax,  eval_dates_arimax  = models["ARIMAX"].values()
+    acts_mid,     preds_mid,     eval_dates_mid     = models["U-MIDAS"].values()
+    acts_lasso,   preds_lasso,   eval_dates_lasso   = models["LASSO"].values()
+    acts_rf,      preds_rf,      dates_rf           = models["RF"].values()
+    acts_mlp,     preds_mlp,     dates_mlp          = models["MIDAS-Net"].values()
+    acts_r,       preds_r,       eval_dates_r       = models["r-MIDAS"].values()
+
+    
     # Collect all model predictions aligned on ARIMA dates
     all_preds = {
         "ARIMA":      np.array(preds_arima),
@@ -226,8 +260,8 @@ def forecast_with_sentiment_models_mm(
     # Define unweighted combos
     unw_combos = {
         "Comb1_ARIMA_ARIMAX_RF":    ["ARIMA", "ARIMAX", "RF"],
-        "Comb2_UMIDAS_LASSO_RF":    ["U-MIDAS", "LASSO", "ARIMA"],
-        "Comb3_MLP_RMIDAS_ARIMA":   ["LASSO", "r-MIDAS", "RF"]
+        "Comb2_UMIDAS_LASSO_ARIMA":    ["U-MIDAS", "LASSO", "ARIMA"],
+        "Comb3_LASSO_RMIDAS_RF":   ["LASSO", "r-MIDAS", "RF"]
     }
     comb_rmse = {}
     comb_preds = {}

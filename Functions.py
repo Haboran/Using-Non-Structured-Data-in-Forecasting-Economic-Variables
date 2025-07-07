@@ -338,57 +338,66 @@ def rolling_rmse_heatmap(model_outputs, window=4,
     #%%
 def heatmap_on_ax(ax, model_outputs, window=4,
                   start='2017-01-01', end='2024-12-31', title=''):
-    """Internal: computes rolling RMSE and plots onto provided Axes."""
-    # Compute rolling RMSE series
+    import numpy as np
+    import pandas as pd
+    import matplotlib.dates as mdates
+
+    # 1) compute rolling RMSE series for each model
     rmse_dict = {}
     for name, (acts, preds, dates) in model_outputs.items():
-        acts = np.array(acts)
-        preds = np.array(preds)
-        idx = pd.to_datetime(dates[-len(acts):])
-        errs = acts - preds
-        rmse = (pd.Series(errs**2, index=idx)
-                   .rolling(window=window, min_periods=1)
-                   .mean()**0.5)
+        a = np.array(acts)
+        p = np.array(preds)
+
+        # ← ALIGN TO SAME LENGTH ←
+        n = min(len(a), len(p))
+        if n == 0:
+            continue
+        a = a[-n:]
+        p = p[-n:]
+        idx = pd.to_datetime(dates[-n:])
+
+        errs = a - p
+        rmse = (
+            pd.Series(errs**2, index=idx)
+              .rolling(window=window, min_periods=1)
+              .mean()**0.5
+        )
         rmse_dict[name] = rmse
 
-    # Common full index
-    sample = next(iter(rmse_dict.values()))
-    freq = pd.infer_freq(sample.index) or 'M'
+    # 2) align to a common date grid
+    sample     = next(iter(rmse_dict.values()))
+    freq       = pd.infer_freq(sample.index) or 'M'
     full_dates = pd.date_range(start, end, freq=freq)
+    df = pd.DataFrame({m: s.reindex(full_dates) for m, s in rmse_dict.items()}).T
 
-    # Build reindexed DataFrame
-    df = pd.DataFrame({m: s.reindex(full_dates) for m, s in rmse_dict.items()})
-    df = df.T  # rows=models, cols=dates
+    # 3) reverse row order if desired
+    df = df.iloc[::-1]
 
-    # Mask NaNs
+    # 4) build masked array and plot
     data = np.ma.masked_invalid(df.values)
     cmap = plt.get_cmap('viridis', 256)
     cmap.set_bad(color='white')
 
-    # Plot heatmap onto the given axes
-    mdates_vals = mdates.date2num(full_dates.to_pydatetime())
-    extent = [mdates_vals[0], mdates_vals[-1], 0, len(df)]
-    im = ax.imshow(
-        data, aspect='auto', interpolation='nearest',
-        cmap=cmap, extent=extent, origin='lower'
-    )
+    mvals  = mdates.date2num(full_dates.to_pydatetime())
+    extent = [mvals[0], mvals[-1], 0, len(df)]
+    ax.imshow(data, aspect='auto', interpolation='nearest',
+              cmap=cmap, extent=extent, origin='lower')
 
+    # 5) labels & format
     ax.set_yticks(np.arange(len(df.index)))
     ax.set_yticklabels(df.index, fontsize=8)
     ax.set_title(title, fontsize=10)
-
     ax.xaxis_date()
     ax.xaxis.set_major_locator(mdates.YearLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
     ax.set_xlim(extent[0], extent[1])
 
-    return im
 
 def plot_country_rolling_rmse(country,
-                              gdp_epu, gdp_figas, gdp_ashwin,
-                              inf_epu, inf_figas, inf_ashwin,
+                              gdp_epu, gdp_figas, 
+                              inf_epu, inf_figas, 
                               window=4, start='2017-01-01', end='2024-12-31'):
-    fig, axes = plt.subplots(3, 2, figsize=(14, 12), sharex='col')
+    fig, axes = plt.subplots(2, 2, figsize=(14, 12), sharex='col')
     # Top row: EPU
     heatmap_on_ax(axes[0,0], gdp_epu, window, start, end, title=f"EPU GDP")
     heatmap_on_ax(axes[0,1], inf_epu, window, start, end, title=f"EPU Inflation")
@@ -396,8 +405,8 @@ def plot_country_rolling_rmse(country,
     heatmap_on_ax(axes[1,0], gdp_figas, window, start, end, title=f"FIGAS GDP")
     heatmap_on_ax(axes[1,1], inf_figas, window, start, end, title=f"FIGAS Inflation")
     # Bottom: Ashwin
-    heatmap_on_ax(axes[2,0], gdp_ashwin, window, start, end, title=f"Ashwin GDP")
-    heatmap_on_ax(axes[2,1], inf_ashwin, window, start, end, title=f"Ashwin Inflation")
+    # heatmap_on_ax(axes[2,0], gdp_ashwin, window, start, end, title=f"Ashwin GDP")
+    # heatmap_on_ax(axes[2,1], inf_ashwin, window, start, end, title=f"Ashwin Inflation")
 
     fig.suptitle(f"Rolling RMSE Heatmaps for {country}", fontsize=14)
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
