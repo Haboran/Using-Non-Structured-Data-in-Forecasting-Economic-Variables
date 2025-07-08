@@ -380,9 +380,10 @@ def heatmap_on_ax(ax, model_outputs, window=4,
 
     mvals  = mdates.date2num(full_dates.to_pydatetime())
     extent = [mvals[0], mvals[-1], 0, len(df)]
-    ax.imshow(data, aspect='auto', interpolation='nearest',
-              cmap=cmap, extent=extent, origin='lower')
-
+    im = ax.imshow(
+        data, aspect='auto', interpolation='nearest',
+        cmap=cmap, extent=extent, origin='lower'
+    )
     # 5) labels & format
     ax.set_yticks(np.arange(len(df.index)))
     ax.set_yticklabels(df.index, fontsize=8)
@@ -391,6 +392,7 @@ def heatmap_on_ax(ax, model_outputs, window=4,
     ax.xaxis.set_major_locator(mdates.YearLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
     ax.set_xlim(extent[0], extent[1])
+    return im
 
 
 def plot_country_rolling_rmse(country,
