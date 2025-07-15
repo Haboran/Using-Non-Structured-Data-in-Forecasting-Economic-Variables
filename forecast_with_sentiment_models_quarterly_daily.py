@@ -394,7 +394,7 @@ def forecast_with_sentiment_models_qd(series, sentiment_df_quarterly, sentiment_
     model_outputs = {
         f"ARIMA H={H}": (acts_arima, preds_arima, eval_dates_arima),
         f"ARIMAX H={H}": (acts_arimax, preds_arimax, eval_dates_arimax),
-   #     f"U-MIDAS H={H}": (acts_mid, preds_mid, eval_dates_mid),
+    #    f"U-MIDAS H={H}": (acts_mid, preds_mid, eval_dates_mid),
         f"LASSO H={H}": (acts_lasso, preds_lasso, eval_dates_lasso),
         f"RF H={H}":(acts_rf,preds_rf,dates_rf),
    #     f"MIDAS-Net H={H}":(acts_mlp,preds_mlp,dates_mlp),

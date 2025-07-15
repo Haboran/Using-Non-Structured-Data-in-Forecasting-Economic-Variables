@@ -30,6 +30,7 @@ from scipy.stats import t
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
 import matplotlib.dates as mdates
+from matplotlib.colors import LinearSegmentedColormap
 
 #%% 
 def get_top_2_sentiments(country_code, target_series, sentiment_df, sentiment_cols,
@@ -336,8 +337,8 @@ def rolling_rmse_heatmap(model_outputs, window=4,
     
     
     #%%
-def heatmap_on_ax(ax, model_outputs, window=4,
-                  start='2017-01-01', end='2024-12-31', title=''):
+def heatmap_on_ax(ax, model_outputs, window=4, start='2017-01-01', end='2024-12-31',
+                  title='', vmin=None, vmax=None, cmap=None):
     import numpy as np
     import pandas as pd
     import matplotlib.dates as mdates
@@ -348,7 +349,6 @@ def heatmap_on_ax(ax, model_outputs, window=4,
         a = np.array(acts)
         p = np.array(preds)
 
-        # ← ALIGN TO SAME LENGTH ←
         n = min(len(a), len(p))
         if n == 0:
             continue
@@ -364,27 +364,32 @@ def heatmap_on_ax(ax, model_outputs, window=4,
         )
         rmse_dict[name] = rmse
 
-    # 2) align to a common date grid
-    sample     = next(iter(rmse_dict.values()))
-    freq       = pd.infer_freq(sample.index) or 'M'
+    # 2) align to common date grid
+    if not rmse_dict:
+        return None
+    sample = next(iter(rmse_dict.values()))
+    freq = pd.infer_freq(sample.index) or 'M'
     full_dates = pd.date_range(start, end, freq=freq)
     df = pd.DataFrame({m: s.reindex(full_dates) for m, s in rmse_dict.items()}).T
+    df = df.iloc[::-1]  # reverse row order
 
-    # 3) reverse row order if desired
-    df = df.iloc[::-1]
-
-    # 4) build masked array and plot
+    # 3) build masked array and plot
+    
     data = np.ma.masked_invalid(df.values)
-    cmap = plt.get_cmap('viridis', 256)
+    if cmap is None:
+        cmap = plt.get_cmap('viridis', 256)
     cmap.set_bad(color='white')
 
-    mvals  = mdates.date2num(full_dates.to_pydatetime())
+    
+    mvals = mdates.date2num(full_dates.to_pydatetime())
     extent = [mvals[0], mvals[-1], 0, len(df)]
     im = ax.imshow(
         data, aspect='auto', interpolation='nearest',
-        cmap=cmap, extent=extent, origin='lower'
+        cmap=cmap, extent=extent, origin='lower',
+        vmin=vmin, vmax=vmax
     )
-    # 5) labels & format
+
+    # 4) labels & formatting
     ax.set_yticks(np.arange(len(df.index)))
     ax.set_yticklabels(df.index, fontsize=8)
     ax.set_title(title, fontsize=10)
@@ -394,23 +399,93 @@ def heatmap_on_ax(ax, model_outputs, window=4,
     ax.set_xlim(extent[0], extent[1])
     return im
 
+def compute_rmse_range(*datasets, window=4):
+    """Helper to compute global RMSE range across all provided datasets."""
+    all_vals = []
+    for data in datasets:
+        for _, (acts, preds, _) in data.items():
+            a, p = np.array(acts), np.array(preds)
+            n = min(len(a), len(p))
+            if n == 0:
+                continue
+            rmse = pd.Series((a[-n:] - p[-n:])**2).rolling(window, min_periods=1).mean()**0.5
+            all_vals.extend(rmse.values)
+    return np.nanmin(all_vals), np.nanmax(all_vals)
+
 
 def plot_country_rolling_rmse(country,
-                              gdp_epu, gdp_figas, 
-                              inf_epu, inf_figas, 
+                              gdp_epu, gdp_figas,
+                              inf_epu, inf_figas,
                               window=4, start='2017-01-01', end='2024-12-31'):
+
+    # 1) Compute separate RMSE ranges
+    vmin_inf, vmax_inf = compute_rmse_range(inf_epu, inf_figas, window=window)
+    vmin_gdp, vmax_gdp = compute_rmse_range(gdp_epu, gdp_figas, window=window)
+
+    # 2) Define colormap
+    custom_cmap = LinearSegmentedColormap.from_list(
+        'custom_heat', ['darkblue','blue','cyan','yellow','orange','red','darkred']
+    )
+
+    # 3) Make a 2×2 grid
     fig, axes = plt.subplots(2, 2, figsize=(14, 12), sharex='col')
-    # Top row: EPU
-    heatmap_on_ax(axes[0,0], gdp_epu, window, start, end, title=f"EPU GDP")
-    heatmap_on_ax(axes[0,1], inf_epu, window, start, end, title=f"EPU Inflation")
-    # Middle: FIGAS
-    heatmap_on_ax(axes[1,0], gdp_figas, window, start, end, title=f"FIGAS GDP")
-    heatmap_on_ax(axes[1,1], inf_figas, window, start, end, title=f"FIGAS Inflation")
-    # Bottom: Ashwin
-    # heatmap_on_ax(axes[2,0], gdp_ashwin, window, start, end, title=f"Ashwin GDP")
-    # heatmap_on_ax(axes[2,1], inf_ashwin, window, start, end, title=f"Ashwin Inflation")
 
+    # 4) Draw heatmaps (left = Inflation, right = GDP)
+    im_inf1 = heatmap_on_ax(axes[0, 0], inf_epu,    window, start, end,
+                            title="EPU Inflation",
+                            vmin=vmin_inf, vmax=vmax_inf,
+                            cmap=custom_cmap)
+    im_gdp1 = heatmap_on_ax(axes[0, 1], gdp_epu,    window, start, end,
+                            title="EPU GDP",
+                            vmin=vmin_gdp, vmax=vmax_gdp,
+                            cmap=custom_cmap)
+
+    im_inf2 = heatmap_on_ax(axes[1, 0], inf_figas, window, start, end,
+                            title="FIGAS Inflation",
+                            vmin=vmin_inf, vmax=vmax_inf,
+                            cmap=custom_cmap)
+    im_gdp2 = heatmap_on_ax(axes[1, 1], gdp_figas, window, start, end,
+                            title="FIGAS GDP",
+                            vmin=vmin_gdp, vmax=vmax_gdp,
+                            cmap=custom_cmap)
+
+    # ── CENTER THE Y-LABELS IN EACH ROW ──
+    heatmap_axes = [
+        (axes[0, 0], inf_epu),
+        (axes[0, 1], gdp_epu),
+        (axes[1, 0], inf_figas),
+        (axes[1, 1], gdp_figas),
+    ]
+    for ax, data_dict in heatmap_axes:
+        labels = list(data_dict.keys())
+        n_rows = len(labels)
+        ax.set_yticks(np.arange(n_rows) + 0.5)
+        ax.set_yticklabels(labels, va='center', rotation=0)
+
+    # 5) Format x-axis
+    for ax in axes.flatten():
+        ax.xaxis.set_major_locator(mdates.YearLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+        ax.tick_params(axis='x', labelrotation=45, labelsize=8)
+        ax.set_xlabel("Year")
+
+    # 6) Add two separate colorbars
+    cax_inf = fig.add_axes([0.45, 0.15, 0.02, 0.7])
+    cb_inf = fig.colorbar(im_inf1, cax=cax_inf)
+    cb_inf.set_label("RMSE (Inflation)", rotation=270, labelpad=15)
+
+    cax_gdp = fig.add_axes([0.98, 0.15, 0.02, 0.7])
+    cb_gdp = fig.colorbar(im_gdp1, cax=cax_gdp)
+    cb_gdp.set_label("RMSE (GDP)", rotation=270, labelpad=15)
+
+    # 7) Title + layout adjust
     fig.suptitle(f"Rolling RMSE Heatmaps for {country}", fontsize=14)
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.show()
+    fig.subplots_adjust(
+        left=0.05,
+        right=0.97,
+        wspace=0.4,
+        top=0.96,
+        bottom=0.03
+    )
 
+    plt.show()

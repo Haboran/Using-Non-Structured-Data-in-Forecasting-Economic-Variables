@@ -57,7 +57,7 @@ def forecast_with_sentiment_models_mm(
     y = pd.to_numeric(y, errors='coerce').dropna()
     p = order[0]
     # force at least one AR-lag so p is never zero
-    p = max(p, 1)
+    p = max(p, forecast_horizon)
 
     H = forecast_horizon
 
