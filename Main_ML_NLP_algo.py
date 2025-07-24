@@ -1440,7 +1440,7 @@ for country in countries:
     vmin_gdp, vmax_gdp = collect_country_rmse_vals(gdp_datasets, country, window)
 
     fig, axes = plt.subplots(5, 2, figsize=(14, 20), sharex='col')
-    fig.suptitle(f"{country} — Pre-COVID Rolling RMSE Heatmaps", fontsize=16)
+    #fig.suptitle(f"{country} — Pre-COVID Rolling RMSE Heatmaps", fontsize=16)
 
     # --- Inflation column (left) ---
     heatmap_on_ax(axes[0, 0], all_raw_outputs_inf_epu_pre_covid[country],
@@ -1555,7 +1555,7 @@ countries    = ["Germany","France","Spain","Italy"]
 model_order  = ["ARIMA","ARIMAX","U-MIDAS","LASSO","RF","MIDAS-Net","r-MIDAS"]
 sentiments   = ['loughran','stability','afinn','vader','econlex']
 post_covid   = pd.to_datetime("2020-01-01")
-output_path  = r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Tables\all_tables.tex"
+output_path  = r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Tables\all_tablesH=1.tex"
 
 with open(output_path, "w") as f:
     # 1) Post-COVID single-model absolute
@@ -1571,21 +1571,21 @@ with open(output_path, "w") as f:
                             caption=f"Post-COVID single-model RMSEs for {country} (absolute)",
                             label=f"tab:{country.lower()}_rmse_single_post_abs"))
         f.write("\n\n")
-    # 2) Post-COVID single-model relative
-    for country in countries:
-        df = pd.DataFrame({
-            "GDP Figas": pd.Series(all_summary_rmse_gdp_figas[country]),
-            "GDP EPU":   pd.Series(all_summary_rmse_gdp_epu[country]),
-            "INF Figas": pd.Series(all_summary_rmse_inf_figas[country]),
-            "INF EPU":   pd.Series(all_summary_rmse_inf_epu[country]),
-        }).reindex(model_order)
-        baseline = df.loc["ARIMA"]
-        df_rel = df.div(baseline, axis=1)
-        f.write(f"% === {country} — Single-model RMSEs (post-COVID, relative) ===\n")
-        f.write(df_rel.to_latex(float_format="%.2f", na_rep="--",
-                                caption=f"Post-COVID single-model RMSEs for {country} (relative to ARIMA)",
-                                label=f"tab:{country.lower()}_rmse_single_post_rel"))
-        f.write("\n\n")
+    # # 2) Post-COVID single-model relative
+    # for country in countries:
+    #     df = pd.DataFrame({
+    #         "GDP Figas": pd.Series(all_summary_rmse_gdp_figas[country]),
+    #         "GDP EPU":   pd.Series(all_summary_rmse_gdp_epu[country]),
+    #         "INF Figas": pd.Series(all_summary_rmse_inf_figas[country]),
+    #         "INF EPU":   pd.Series(all_summary_rmse_inf_epu[country]),
+    #     }).reindex(model_order)
+    #     baseline = df.loc["ARIMA"]
+    #     df_rel = df.div(baseline, axis=1)
+    #     f.write(f"% === {country} — Single-model RMSEs (post-COVID, relative) ===\n")
+    #     f.write(df_rel.to_latex(float_format="%.2f", na_rep="--",
+    #                             caption=f"Post-COVID single-model RMSEs for {country} (relative to ARIMA)",
+    #                             label=f"tab:{country.lower()}_rmse_single_post_rel"))
+    #     f.write("\n\n")
     # 3) Post-COVID combo-model absolute
     for country in countries:
         combos = {
@@ -1613,44 +1613,44 @@ with open(output_path, "w") as f:
                                   caption=f"Post-COVID combination RMSEs for {country} (absolute)",
                                   label=f"tab:{country.lower()}_rmse_combo_post_abs"))
         f.write("\n\n")
-    # 4) Post-COVID combo-model relative
-    for country in countries:
-        combos = {
-            "GDP Figas": all_combo_outputs_gdp_figas[country],
-            "GDP EPU":   all_combo_outputs_gdp_epu[country],
-            "INF Figas": all_combo_outputs_inf_figas[country],
-            "INF EPU":   all_combo_outputs_inf_epu[country],
-        }
-        combo_names = sorted(set().union(*(d.keys() for d in combos.values())))
-        df_combo = pd.DataFrame(index=combo_names, columns=combos.keys(), dtype=float)
+    # # 4) Post-COVID combo-model relative
+    # for country in countries:
+    #     combos = {
+    #         "GDP Figas": all_combo_outputs_gdp_figas[country],
+    #         "GDP EPU":   all_combo_outputs_gdp_epu[country],
+    #         "INF Figas": all_combo_outputs_inf_figas[country],
+    #         "INF EPU":   all_combo_outputs_inf_epu[country],
+    #     }
+    #     combo_names = sorted(set().union(*(d.keys() for d in combos.values())))
+    #     df_combo = pd.DataFrame(index=combo_names, columns=combos.keys(), dtype=float)
 
-        for col, cd in combos.items():
-            for name, (acts, preds, dates) in cd.items():
-                a = np.array(acts)
-                p = np.array(preds)
-                n = min(len(a), len(p))
-                rmse = np.sqrt(((a[-n:] - p[-n:])**2).mean()) if n else np.nan
-                df_combo.at[name, col] = rmse
+    #     for col, cd in combos.items():
+    #         for name, (acts, preds, dates) in cd.items():
+    #             a = np.array(acts)
+    #             p = np.array(preds)
+    #             n = min(len(a), len(p))
+    #             rmse = np.sqrt(((a[-n:] - p[-n:])**2).mean()) if n else np.nan
+    #             df_combo.at[name, col] = rmse
 
-        # Normalize using same ARIMA summary values as single-model
-        baseline = {
-            "GDP Figas": all_summary_rmse_gdp_figas[country]["ARIMA"],
-            "GDP EPU":   all_summary_rmse_gdp_epu[country]["ARIMA"],
-            "INF Figas": all_summary_rmse_inf_figas[country]["ARIMA"],
-            "INF EPU":   all_summary_rmse_inf_epu[country]["ARIMA"],
-        }
-        df_rel = df_combo.div(pd.Series(baseline), axis=1)
+    #     # Normalize using same ARIMA summary values as single-model
+    #     baseline = {
+    #         "GDP Figas": all_summary_rmse_gdp_figas[country]["ARIMA"],
+    #         "GDP EPU":   all_summary_rmse_gdp_epu[country]["ARIMA"],
+    #         "INF Figas": all_summary_rmse_inf_figas[country]["ARIMA"],
+    #         "INF EPU":   all_summary_rmse_inf_epu[country]["ARIMA"],
+    #     }
+    #     df_rel = df_combo.div(pd.Series(baseline), axis=1)
 
-        df_combo.index = df_combo.index.str.replace("_", " ")
-        df_rel.index = df_rel.index.str.replace("_", " ")
+    #     df_combo.index = df_combo.index.str.replace("_", " ")
+    #     df_rel.index = df_rel.index.str.replace("_", " ")
 
-        f.write(f"% === {country} — Combination-model RMSEs (post-COVID, relative) ===\n")
-        f.write(df_rel.to_latex(
-            float_format="%.2f", na_rep="--",
-            caption=f"Post-COVID combination RMSEs for {country} (relative to ARIMA)",
-            label=f"tab:{country.lower()}_rmse_combo_post_rel"
-        ))
-        f.write("\n\n")
+    #     f.write(f"% === {country} — Combination-model RMSEs (post-COVID, relative) ===\n")
+    #     f.write(df_rel.to_latex(
+    #         float_format="%.2f", na_rep="--",
+    #         caption=f"Post-COVID combination RMSEs for {country} (relative to ARIMA)",
+    #         label=f"tab:{country.lower()}_rmse_combo_post_rel"
+        # ))
+        # f.write("\n\n")
     
     # 5) Pre-COVID single-model absolute
     for country in countries:
@@ -1665,21 +1665,21 @@ with open(output_path, "w") as f:
                             caption=f"Pre-COVID single-model RMSEs for {country} (absolute)",
                             label=f"tab:{country.lower()}_rmse_single_pre_abs"))
         f.write("\n\n")
-    # 6) Pre-COVID single-model relative
-    for country in countries:
-        df = pd.DataFrame({
-            "GDP Figas": pd.Series(all_summary_rmse_gdp_figas_pre_covid[country]),
-            "GDP EPU":   pd.Series(all_summary_rmse_gdp_epu_pre_covid[country]),
-            "INF Figas": pd.Series(all_summary_rmse_inf_figas_pre_covid[country]),
-            "INF EPU":   pd.Series(all_summary_rmse_inf_epu_pre_covid[country]),
-        }).reindex(model_order)
-        baseline = df.loc["ARIMA"]
-        df_rel = df.div(baseline, axis=1)
-        f.write(f"% === {country} — Single-model RMSEs (pre-COVID, relative) ===\n")
-        f.write(df_rel.to_latex(float_format="%.2f", na_rep="--",
-                                caption=f"Pre-COVID single-model RMSEs for {country} (relative to ARIMA)",
-                                label=f"tab:{country.lower()}_rmse_single_pre_rel"))
-        f.write("\n\n")
+    # # 6) Pre-COVID single-model relative
+    # for country in countries:
+    #     df = pd.DataFrame({
+    #         "GDP Figas": pd.Series(all_summary_rmse_gdp_figas_pre_covid[country]),
+    #         "GDP EPU":   pd.Series(all_summary_rmse_gdp_epu_pre_covid[country]),
+    #         "INF Figas": pd.Series(all_summary_rmse_inf_figas_pre_covid[country]),
+    #         "INF EPU":   pd.Series(all_summary_rmse_inf_epu_pre_covid[country]),
+    #     }).reindex(model_order)
+    #     baseline = df.loc["ARIMA"]
+    #     df_rel = df.div(baseline, axis=1)
+    #     f.write(f"% === {country} — Single-model RMSEs (pre-COVID, relative) ===\n")
+    #     f.write(df_rel.to_latex(float_format="%.2f", na_rep="--",
+    #                             caption=f"Pre-COVID single-model RMSEs for {country} (relative to ARIMA)",
+    #                             label=f"tab:{country.lower()}_rmse_single_pre_rel"))
+        # f.write("\n\n")
     # 7) Pre-COVID combo-model absolute
     for country in countries:
         combos_pre = {
@@ -1705,47 +1705,47 @@ with open(output_path, "w") as f:
                                 caption=f"Pre-COVID combination RMSEs for {country} (absolute)",
                                 label=f"tab:{country.lower()}_rmse_combo_pre_abs"))
         f.write("\n\n")
-    # 8) Pre-COVID combo-model relative
-    for country in countries:
-        combos_pre = {
-            "GDP Figas": all_combo_outputs_gdp_figas_pre_covid[country],
-            "GDP EPU":   all_combo_outputs_gdp_epu_pre_covid[country],
-            "INF Figas": all_combo_outputs_inf_figas_pre_covid[country],
-            "INF EPU":   all_combo_outputs_inf_epu_pre_covid[country],
-        }
-        combo_names = sorted(
-            set().union(*(d.keys() for d in combos_pre.values()))
-        )
-        df_pre = pd.DataFrame(index=combo_names, columns=combos_pre.keys(), dtype=float)
+    # # 8) Pre-COVID combo-model relative
+    # for country in countries:
+    #     combos_pre = {
+    #         "GDP Figas": all_combo_outputs_gdp_figas_pre_covid[country],
+    #         "GDP EPU":   all_combo_outputs_gdp_epu_pre_covid[country],
+    #         "INF Figas": all_combo_outputs_inf_figas_pre_covid[country],
+    #         "INF EPU":   all_combo_outputs_inf_epu_pre_covid[country],
+    #     }
+    #     combo_names = sorted(
+    #         set().union(*(d.keys() for d in combos_pre.values()))
+    #     )
+    #     df_pre = pd.DataFrame(index=combo_names, columns=combos_pre.keys(), dtype=float)
 
-        for col, combo_dict in combos_pre.items():
-            for name, (acts, preds, dates) in combo_dict.items():
-                a = np.array(acts)
-                p = np.array(preds)
-                n_min = min(len(a), len(p))
-                # compute RMSE over the aligned pre-COVID series
-                rmse = np.sqrt(np.mean((a[-n_min:] - p[-n_min:])**2)) if n_min else np.nan
-                df_pre.at[name, col] = rmse
+    #     for col, combo_dict in combos_pre.items():
+    #         for name, (acts, preds, dates) in combo_dict.items():
+    #             a = np.array(acts)
+    #             p = np.array(preds)
+    #             n_min = min(len(a), len(p))
+    #             # compute RMSE over the aligned pre-COVID series
+    #             rmse = np.sqrt(np.mean((a[-n_min:] - p[-n_min:])**2)) if n_min else np.nan
+    #             df_pre.at[name, col] = rmse
 
-        baseline = {
-            "GDP Figas": all_summary_rmse_gdp_figas_pre_covid[country]["ARIMA"],
-            "GDP EPU":   all_summary_rmse_gdp_epu_pre_covid[country]["ARIMA"],
-            "INF Figas": all_summary_rmse_inf_figas_pre_covid[country]["ARIMA"],
-            "INF EPU":   all_summary_rmse_inf_epu_pre_covid[country]["ARIMA"],
-        }
-        df_rel = df_pre.div(pd.Series(baseline), axis=1)
+    #     baseline = {
+    #         "GDP Figas": all_summary_rmse_gdp_figas_pre_covid[country]["ARIMA"],
+    #         "GDP EPU":   all_summary_rmse_gdp_epu_pre_covid[country]["ARIMA"],
+    #         "INF Figas": all_summary_rmse_inf_figas_pre_covid[country]["ARIMA"],
+    #         "INF EPU":   all_summary_rmse_inf_epu_pre_covid[country]["ARIMA"],
+    #     }
+    #     df_rel = df_pre.div(pd.Series(baseline), axis=1)
 
-        # replace underscores in the index with spaces
-        df_rel.index = df_rel.index.str.replace("_", " ")
+    #     # replace underscores in the index with spaces
+    #     df_rel.index = df_rel.index.str.replace("_", " ")
 
-        f.write(f"% === {country} — Combination-model RMSEs (pre-COVID, relative) ===\n")
-        f.write(df_rel.to_latex(
-            float_format="%.2f", na_rep="--",
-            caption=f"Pre-COVID combination RMSEs for {country}, relative to ARIMA",
-            label=f"tab:{country.lower()}_rmse_combo_pre_rel",
-            column_format="lcccc"
-        ))
-        f.write("\n\n")
+    #     f.write(f"% === {country} — Combination-model RMSEs (pre-COVID, relative) ===\n")
+    #     f.write(df_rel.to_latex(
+    #         float_format="%.2f", na_rep="--",
+    #         caption=f"Pre-COVID combination RMSEs for {country}, relative to ARIMA",
+    #         label=f"tab:{country.lower()}_rmse_combo_pre_rel",
+    #         column_format="lcccc"
+    #     ))
+    #     f.write("\n\n")
     
     # 5) Post-COVID Ashwin sentiment RMSEs, split into GDP vs INF
     for country in countries:
@@ -1841,13 +1841,13 @@ with open(output_path, "w") as f:
             column_format="lccccc"
         )); f.write("\n\n")
 
-        f.write(f"% === {country} — Ashwin INF (single, relative) ===\n")
-        f.write(df_inf_rel.to_latex(
-            float_format="%.2f", na_rep="--",
-            caption=f"Post-COVID Ashwin INF RMSEs for {country} (relative to ARIMA)",
-            label=f"tab:{country.lower()}_ashwin_inf_post_rel",
-            column_format="lccccc"
-        )); f.write("\n\n")
+        # f.write(f"% === {country} — Ashwin INF (single, relative) ===\n")
+        # f.write(df_inf_rel.to_latex(
+        #     float_format="%.2f", na_rep="--",
+        #     caption=f"Post-COVID Ashwin INF RMSEs for {country} (relative to ARIMA)",
+        #     label=f"tab:{country.lower()}_ashwin_inf_post_rel",
+        #     column_format="lccccc"
+        # )); f.write("\n\n")
         
         # replace underscores in the index with spaces
         df_inf_combo_abs.index = df_inf_combo_abs.index.str.replace("_", " ")
@@ -1859,15 +1859,15 @@ with open(output_path, "w") as f:
             column_format="lccccc"
         )); f.write("\n\n")
         
-        # replace underscores in the index with spaces
-        df_inf_combo_rel.index = df_inf_combo_rel.index.str.replace("_", " ")
-        f.write(f"% === {country} — Ashwin INF (combo, relative) ===\n")
-        f.write(df_inf_combo_rel.to_latex(
-            float_format="%.2f", na_rep="--",
-            caption=f"Post-COVID Ashwin INF combo RMSEs for {country} (relative to ARIMA)",
-            label=f"tab:{country.lower()}_ashwin_inf_post_combo_rel",
-            column_format="lccccc"
-        )); f.write("\n\n")
+        # # replace underscores in the index with spaces
+        # df_inf_combo_rel.index = df_inf_combo_rel.index.str.replace("_", " ")
+        # f.write(f"% === {country} — Ashwin INF (combo, relative) ===\n")
+        # f.write(df_inf_combo_rel.to_latex(
+        #     float_format="%.2f", na_rep="--",
+        #     caption=f"Post-COVID Ashwin INF combo RMSEs for {country} (relative to ARIMA)",
+        #     label=f"tab:{country.lower()}_ashwin_inf_post_combo_rel",
+        #     column_format="lccccc"
+        # )); f.write("\n\n")
         
     
 print(f"All tables written to {output_path}")

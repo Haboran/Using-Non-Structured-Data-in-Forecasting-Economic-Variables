@@ -371,7 +371,7 @@ def heatmap_on_ax(ax, model_outputs, window=4, start='2017-01-01', end='2024-12-
     freq = pd.infer_freq(sample.index) or 'M'
     full_dates = pd.date_range(start, end, freq=freq)
     df = pd.DataFrame({m: s.reindex(full_dates) for m, s in rmse_dict.items()}).T
-    df = df.iloc[::-1]  # reverse row order
+    # df = df.iloc[::-1]  # reverse row order
 
     # 3) build masked array and plot
     
@@ -385,7 +385,7 @@ def heatmap_on_ax(ax, model_outputs, window=4, start='2017-01-01', end='2024-12-
     extent = [mvals[0], mvals[-1], 0, len(df)]
     im = ax.imshow(
         data, aspect='auto', interpolation='nearest',
-        cmap=cmap, extent=extent, origin='lower',
+        cmap=cmap, extent=extent, origin='upper',
         vmin=vmin, vmax=vmax
     )
 
@@ -428,7 +428,7 @@ def plot_country_rolling_rmse(country,
     )
 
     # 3) Make a 2×2 grid
-    fig, axes = plt.subplots(2, 2, figsize=(14, 12), sharex='col')
+    fig, axes = plt.subplots(2, 2, figsize=(14, 8), sharex='col')
 
     # 4) Draw heatmaps (left = Inflation, right = GDP)
     im_inf1 = heatmap_on_ax(axes[0, 0], inf_epu,    window, start, end,
@@ -457,11 +457,12 @@ def plot_country_rolling_rmse(country,
         (axes[1, 1], gdp_figas),
     ]
     for ax, data_dict in heatmap_axes:
-        labels = list(data_dict.keys())
+        labels = list(data_dict.keys())[::-1]
         n_rows = len(labels)
         ax.set_yticks(np.arange(n_rows) + 0.5)
         ax.set_yticklabels(labels, va='center', rotation=0)
-
+        
+        
     # 5) Format x-axis
     for ax in axes.flatten():
         ax.xaxis.set_major_locator(mdates.YearLocator())
@@ -479,7 +480,7 @@ def plot_country_rolling_rmse(country,
     cb_gdp.set_label("RMSE (GDP)", rotation=270, labelpad=15)
 
     # 7) Title + layout adjust
-    fig.suptitle(f"Rolling RMSE Heatmaps for {country}", fontsize=14)
+    #fig.suptitle(f"Rolling RMSE Heatmaps for {country}", fontsize=14)
     fig.subplots_adjust(
         left=0.05,
         right=0.97,
