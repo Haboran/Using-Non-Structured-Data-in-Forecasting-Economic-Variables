@@ -7,26 +7,14 @@ Created on Thu Jun 26 14:31:55 2025
 #%%
 import pandas as pd
 import matplotlib.pyplot as plt
-from pmdarima import auto_arima
-from sklearn.metrics import mean_squared_error
 import numpy as np
-# from statsmodels.tsa.stattools import adfuller
-from statsmodels.tsa.arima.model import ARIMA
+from sklearn.metrics import mean_squared_error
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-import warnings
-from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-# from functools import reduce
 from sklearn.linear_model import LinearRegression
-from statsmodels.tools.sm_exceptions import ConvergenceWarning
-from pandas.tseries.offsets import QuarterEnd
 from pandas.tseries.offsets import MonthEnd
-# from pyMIDAS.regression import MIDASRegression
 from sklearn.linear_model import LassoCV
 from scipy.optimize import minimize
-from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.stats.diagnostic import acorr_ljungbox
-from scipy.stats import t
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.neural_network import MLPRegressor
 
@@ -497,7 +485,6 @@ def forecast_with_sentiment_models_md(series, sentiment_df_monthly, sentiment_df
         
     # Plotting
     if plot:
-        import matplotlib.pyplot as plt
         plt.figure(figsize=(10, 6))
         plt.plot(eval_dates_arima, acts_arima, '-', color='black', linewidth=1.5, label='Actual')
         plt.plot(eval_dates_arima, preds_arima, '--', label='ARIMA')

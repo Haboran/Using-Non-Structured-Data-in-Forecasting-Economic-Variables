@@ -8,6 +8,7 @@ Created on Thu Jul  5 2025
 
 Function for monthly-frequency forecasting using monthly sentiment indicators.
 """
+#%%
 import pandas as pd
 import numpy as np
 from statsmodels.tsa.statespace.sarimax import SARIMAX
@@ -17,9 +18,8 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error
 from pandas.tseries.offsets import MonthEnd, DateOffset
-from scipy.optimize import minimize
-from Functions import exponential_almon_weights
 
+#%%
 
 def forecast_with_sentiment_models_mm(
     series: pd.Series,

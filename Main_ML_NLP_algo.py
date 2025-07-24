@@ -13,31 +13,16 @@ get_ipython().run_line_magic('clear', '/')
 #%%
 import pandas as pd
 import matplotlib.pyplot as plt
-from pmdarima import auto_arima
-from sklearn.metrics import mean_squared_error
 import numpy as np
-from statsmodels.tsa.stattools import adfuller, kpss
-from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.tsa.statespace.sarimax import SARIMAX
 import warnings
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-# from functools import reduce
-from sklearn.linear_model import LinearRegression
-from statsmodels.tools.sm_exceptions import ConvergenceWarning
-from pandas.tseries.offsets import MonthEnd, QuarterEnd
-# from pyMIDAS.regression import MIDASRegression
-from sklearn.linear_model import LassoCV
-from scipy.optimize import minimize
-from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.stats.diagnostic import acorr_ljungbox
-from scipy.stats import t
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.neural_network import MLPRegressor
 import matplotlib.dates as mdates
 import sys
 import os
-import seaborn as sns
+import joblib
+from pmdarima import auto_arima
+from statsmodels.tools.sm_exceptions import ConvergenceWarning
+from pandas.tseries.offsets import MonthEnd, QuarterEnd
+from statsmodels.tsa.seasonal import seasonal_decompose
 
 #%%
 
@@ -83,13 +68,14 @@ def transform_series(series, method='log_diff'):
 
 #%% 
 #  Forecast horizon:
-h = 12
+h = 1
 
 lag_qu_day = 90
-lag_month_day = 360
+lag_month_day = 30
 lag_quarter_month = 3
 
 
+#%%
 '''     Target macro variables     '''
 
 
@@ -206,12 +192,10 @@ ax.set_xlabel('Date')
 ax.set_ylabel('Inflation Rate')
 plt.tight_layout()
 plt.show()
+
 #%%
 
-
 '''     Sentiments      '''
-
-
 
 sentiment_df = pd.read_csv(
     r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Data\Barbaglia, L., Consoli, S., & Manzan, S. (2024)\eu_sentiments.csv", 
@@ -928,10 +912,6 @@ for country, code in country_map.items():
     start = "2001-01-01" if code=="ES" else "1997-01-01"
     series = gdp_data_tmp[country].loc[start:"2024-10-01"].dropna()
     series = transform_series(series, method="log_diff")
-
-    # 5) Prepare EPU DataFrames for this country:
-    #    - monthly: columns ['date', 'DE_EPU']
-    #    - quarterly: columns ['date', 'DE_EPU']
     ms = (
         epu_monthly[[code]]
         .rename(columns={code: f"{code}_EPU"})
@@ -1652,19 +1632,44 @@ for country in ['Germany', 'France', 'Spain', 'Italy']:
         end='2024-12-31'
     )
     
-for country in ['Germany', 'France', 'Spain', 'Italy']:
-    plot_country_rolling_rmse(
+# for country in ['Germany', 'France', 'Spain', 'Italy']:
+#     plot_country_rolling_rmse(
+#         country=country,
+#         gdp_epu=all_combo_outputs_gdp_epu[country],
+#         gdp_figas=all_combo_outputs_gdp_figas[country],
+#      #   gdp_ashwin=all_combo_outputs_gdp_ashwin[country],
+#         inf_epu=all_combo_outputs_inf_epu[country],
+#         inf_figas=all_combo_outputs_inf_figas[country],
+#       #  inf_ashwin=all_combo_outputs_inf_ashwin[country],
+#         window=4,
+#         start='2017-01-01',
+#         end='2024-12-31'
+#     ) 
+    
+#%%
+for country in ["Germany", "France", "Spain", "Italy"]:
+    plot_forecasts_grouped_by_model(
         country=country,
-        gdp_epu=all_combo_outputs_gdp_epu[country],
-        gdp_figas=all_combo_outputs_gdp_figas[country],
-     #   gdp_ashwin=all_combo_outputs_gdp_ashwin[country],
-        inf_epu=all_combo_outputs_inf_epu[country],
-        inf_figas=all_combo_outputs_inf_figas[country],
-      #  inf_ashwin=all_combo_outputs_inf_ashwin[country],
-        window=4,
-        start='2017-01-01',
-        end='2024-12-31'
-    )    
+        gdp_pre_dicts={
+            "epu": all_raw_outputs_gdp_epu_pre_covid,
+            "figas": all_raw_outputs_gdp_figas_pre_covid
+        },
+        inf_pre_dicts={
+            "epu": all_raw_outputs_inf_epu_pre_covid,
+            "figas": all_raw_outputs_inf_figas_pre_covid
+        },
+        gdp_post_dicts={
+            "epu": all_raw_outputs_gdp_epu,
+            "figas": all_raw_outputs_gdp_figas
+        },
+        inf_post_dicts={
+            "epu": all_raw_outputs_inf_epu,
+            "figas": all_raw_outputs_inf_figas
+        },
+        ashwin_dict_gdp=all_raw_outputs_gdp_ashwin_indiv,
+        ashwin_dict_inf=all_raw_outputs_inf_ashwin_indiv
+    )
+  
 #%%
 
 countries    = ["Germany","France","Spain","Italy"]
@@ -1988,9 +1993,11 @@ with open(output_path, "w") as f:
     
 print(f"All tables written to {output_path}")
 
+
+  
 #%%
-import joblib
-import os
+
+
 
 def save_model_outputs(output_dir=r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Tables", filename="model_outputs_H_12.joblib"):
     """
@@ -2049,35 +2056,9 @@ def save_model_outputs(output_dir=r"C:\Users\oskar\Desktop\Uni\4. Mastersemester
 save_model_outputs()
 #%%
 
-import joblib
-
 loaded_data = joblib.load(r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Tables\model_outputs.joblib")
 
 # Unpack each variable into the global namespace
 globals().update(loaded_data)
 
 print("✅ All variables successfully loaded.")
-
-#%%
-for country in ["Germany", "France", "Spain", "Italy"]:
-    plot_forecasts_grouped_by_model(
-        country=country,
-        gdp_pre_dicts={
-            "epu": all_raw_outputs_gdp_epu_pre_covid,
-            "figas": all_raw_outputs_gdp_figas_pre_covid
-        },
-        inf_pre_dicts={
-            "epu": all_raw_outputs_inf_epu_pre_covid,
-            "figas": all_raw_outputs_inf_figas_pre_covid
-        },
-        gdp_post_dicts={
-            "epu": all_raw_outputs_gdp_epu,
-            "figas": all_raw_outputs_gdp_figas
-        },
-        inf_post_dicts={
-            "epu": all_raw_outputs_inf_epu,
-            "figas": all_raw_outputs_inf_figas
-        },
-        ashwin_dict_gdp=all_raw_outputs_gdp_ashwin_indiv,
-        ashwin_dict_inf=all_raw_outputs_inf_ashwin_indiv
-    )
