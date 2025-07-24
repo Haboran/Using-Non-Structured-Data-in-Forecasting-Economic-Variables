@@ -490,3 +490,94 @@ def plot_country_rolling_rmse(country,
     )
 
     plt.show()
+    
+    
+#%%
+
+def plot_forecasts_grouped_by_model(
+    country,
+    gdp_pre_dicts,
+    inf_pre_dicts,
+    gdp_post_dicts,
+    inf_post_dicts,
+    ashwin_dict_gdp,
+    ashwin_dict_inf,
+    ashwin_sentiments=["vader", "stability", "econlex", "loughran"]
+):
+    def plot_model_group(title_prefix, data_sources, var_type):
+        fig, axes = plt.subplots(len(data_sources), 1, figsize=(12, len(data_sources) * 2.5), sharex=True)
+        if len(data_sources) == 1:
+            axes = [axes]
+
+        for ax, (src, model_data) in zip(axes, data_sources.items()):
+            if model_name not in model_data:
+                continue
+            acts, preds, dates = model_data[model_name]
+            if len(acts) == 0 or len(preds) == 0 or len(dates) == 0:
+                continue
+            acts = np.array(acts)
+            preds = np.array(preds)
+            dates = pd.to_datetime(dates[-len(acts):])
+            ax.plot(dates, acts, color='black', linewidth=1.5, label='Actual')
+            ax.plot(dates, preds, linestyle='-', color='tab:blue', label='Prediction')
+            ax.set_title(f"{src} – {model_name}", fontsize=10)
+            ax.grid(True)
+            ax.legend(fontsize=7)
+
+        axes[-1].set_xlabel("Date")
+        for ax in axes:
+            ax.xaxis.set_major_locator(mdates.YearLocator())
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+            ax.tick_params(axis='x', rotation=45)
+
+        fig.suptitle(f"{country} – {title_prefix} {var_type} – {model_name}", fontsize=14)
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        plt.show()
+
+    sources = ['EPU', 'FIGAS'] + [s.upper() for s in ashwin_sentiments]
+
+    # 1. Pre-COVID GDP
+    gdp_pre_data = {}
+    for src in sources:
+        if src == 'EPU':
+            gdp_pre_data[src] = gdp_pre_dicts['epu'].get(country, {})
+        elif src == 'FIGAS':
+            gdp_pre_data[src] = gdp_pre_dicts['figas'].get(country, {})
+        else:
+            gdp_pre_data[src] = ashwin_dict_gdp.get(country, {}).get(src.lower(), {})
+
+    all_models = sorted(set().union(*(d.keys() for d in gdp_pre_data.values())))
+    for model_name in all_models:
+        plot_model_group("Pre-COVID", gdp_pre_data, "GDP")
+
+    # 2. Pre-COVID Inflation
+    inf_pre_data = {}
+    for src in sources:
+        if src == 'EPU':
+            inf_pre_data[src] = inf_pre_dicts['epu'].get(country, {})
+        elif src == 'FIGAS':
+            inf_pre_data[src] = inf_pre_dicts['figas'].get(country, {})
+        else:
+            inf_pre_data[src] = ashwin_dict_inf.get(country, {}).get(src.lower(), {})
+
+    all_models = sorted(set().union(*(d.keys() for d in inf_pre_data.values())))
+    for model_name in all_models:
+        plot_model_group("Pre-COVID", inf_pre_data, "Inflation")
+
+    # 3. Post-COVID GDP
+    gdp_post_data = {
+        'EPU': gdp_post_dicts['epu'].get(country, {}),
+        'FIGAS': gdp_post_dicts['figas'].get(country, {})
+    }
+    all_models = sorted(set().union(*(d.keys() for d in gdp_post_data.values())))
+    for model_name in all_models:
+        plot_model_group("Post-COVID", gdp_post_data, "GDP")
+
+    # 4. Post-COVID Inflation
+    inf_post_data = {
+        'EPU': inf_post_dicts['epu'].get(country, {}),
+        'FIGAS': inf_post_dicts['figas'].get(country, {})
+    }
+    all_models = sorted(set().union(*(d.keys() for d in inf_post_data.values())))
+    for model_name in all_models:
+        plot_model_group("Post-COVID", inf_post_data, "Inflation")

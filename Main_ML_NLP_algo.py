@@ -37,6 +37,7 @@ from sklearn.neural_network import MLPRegressor
 import matplotlib.dates as mdates
 import sys
 import os
+import seaborn as sns
 
 #%%
 
@@ -54,6 +55,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from Functions import get_top_2_sentiments
 from Functions import plot_country_rolling_rmse
 from Functions import heatmap_on_ax
+from Functions import plot_forecasts_grouped_by_model
 
 #%%
 # Utility function for transforming time series data
@@ -193,26 +195,6 @@ df_inf = df_inf.loc[:, ["Germany", "Spain", "France", "Italy"]]
 
 # 9. (Optional) Inspect
 df_inf = transform_series(df_inf, method='diff')
-
-# for col in df_inf.columns:
-#     # Example: use your Germany inflation series
-#     y = df_inf[col].dropna()
-
-#     # 1) Run ADF with no automatic lag selection if you want to fix your lag length
-#     #    (you can also use autolag='AIC' or 'BIC' if you prefer)
-#     result = adfuller(y, maxlag=12, regression='c', autolag=None)
-
-#     adf_stat   = result[0]
-#     n_lags     = result[2]
-#     n_obs      = result[3]
-#     crit_vals  = result[4]    # dict: { '1%': val1, '5%': val5, '10%': val10 }
-
-#     print(f"ADF statistic: {adf_stat:.3f}")
-#     print(f"Number of lags used: {n_lags}")
-#     print(f"Number of observations: {n_obs}")
-#     print("Critical values:")
-#     for level, cv in crit_vals.items():
-#         print(f"   {level} : {cv:.3f}")
 
 # Assuming df_inf is already defined and contains the four series
 fig, ax = plt.subplots()
@@ -492,6 +474,7 @@ focus_sets = {
     "Germany": ['Germany'],
     "France": ['France'],
     "Italy": ['Italy'],
+    "Spain": ['Spain'],
     "Germany & France": ['Germany', 'France']
 }
 topics = ['economy', 'financial sector', 'inflation', 'manufacturing', 'monetary policy', 'unemployment']
@@ -578,6 +561,139 @@ for label, countries in focus_sets.items():
     plt.legend(loc='upper right')
     plt.show()
 
+#%%
+# 1) Compute per-quarter mean / min / max for each code–lexicon
+lexica = ['loughran', 'stability', 'afinn', 'vader', 'econlex']
+codes  = ['DE','FR','ES','IT']
+
+# melt to long form for easy grouping
+melted = (ashwin_daily_country_sentiment_df
+          .melt(id_vars=['date','quarter'],
+                value_vars=[f"{c}_{lex}" for c in codes for lex in lexica],
+                var_name='code_lex', value_name='score'))
+# split into columns
+melted[['code','lex']] = melted['code_lex'].str.split('_', expand=True)
+
+# group by quarter, code, lexicon
+grp = melted.groupby(['quarter','code','lex'])['score']
+q_mean = grp.mean().unstack('code')    # DataFrame: index=quarter, columns=DE,FR,ES,IT
+q_min  = grp.min().unstack('code')
+q_max  = grp.max().unstack('code')
+
+# global y‑limits
+ymin, ymax = float(melted['score'].min()), float(melted['score'].max())
+
+fig, axs = plt.subplots(2, 3, figsize=(18,10), sharex=True, sharey=True)
+axs = axs.flatten()
+
+for i, lex in enumerate(lexica):
+    ax = axs[i]
+    # extract the quarter×country DataFrames for this lexicon
+    mean_df = q_mean.xs(lex, level='lex')
+    min_df  = q_min.xs(lex, level='lex')
+    max_df  = q_max.xs(lex, level='lex')
+    dates   = mean_df.index.to_timestamp()
+
+    for code in codes:
+        ax.plot(dates, mean_df[code], label=code)
+        ax.fill_between(dates,
+                        min_df[code],
+                        max_df[code],
+                        alpha=0.15)
+
+    ax.set_title(lex.capitalize())
+    ax.set_ylim(ymin, ymax)
+    ax.grid(True)
+    if i >= 3:
+        ax.set_xlabel("Date")
+    if i % 3 == 0:
+        ax.set_ylabel("Sentiment Score")
+
+# drop the empty subplot
+fig.delaxes(axs[-1])
+
+fig.suptitle("Quarterly Ashwin Lexica Sentiment by Country", fontsize=16)
+fig.tight_layout(rect=[0,0,1,0.96])
+plt.legend(loc='upper right', bbox_to_anchor=(1.25,1))
+plt.show()
+
+
+# ——— Quarterly Policy Uncertainty (EPU) ———
+# Assuming epu_quarterly is a DataFrame with columns ['date', 'DE','FR','ES','IT', …]
+
+fig, ax = plt.subplots(figsize=(12,6))
+for code,label in [('DE','Germany'), ('FR','France'),
+                   ('ES','Spain'),   ('IT','Italy')]:
+    ax.plot(epu_quarterly['date'], epu_quarterly[code], label=label)
+
+ax.set_title("Quarterly Policy Uncertainty Index by Country")
+ax.set_xlabel("Date")
+ax.set_ylabel("EPU Index")
+ax.grid(True)
+ax.legend()
+plt.tight_layout()
+plt.show()
+
+#%%
+lexica = ['loughran', 'stability', 'afinn', 'vader', 'econlex']
+codes  = ['DE','FR','ES','IT']
+labels = {'DE':'Germany','FR':'France','ES':'Spain','IT':'Italy'}
+
+# ——— Per‑Country Ashwin Lexica Grids ———
+for code in codes:
+    # filter down to this one country
+    df_country = melted[melted['code']==code]
+
+    # recompute grouped stats
+    grp      = df_country.groupby(['quarter','lex'])['score']
+    q_mean   = grp.mean().unstack('lex')
+    q_min    = grp.min().unstack('lex')
+    q_max    = grp.max().unstack('lex')
+
+    # overall y‑limits for consistency
+    ymin, ymax = float(df_country['score'].min()), float(df_country['score'].max())
+
+    # 2×3 grid (drop last empty)
+    fig, axs = plt.subplots(2,3,figsize=(18,10), sharex=True, sharey=True)
+    axs = axs.flatten()
+
+    for i, lex in enumerate(lexica):
+        ax = axs[i]
+        dates = q_mean.index.to_timestamp()
+
+        ax.plot(dates, q_mean[lex], label=labels[code])
+        ax.fill_between(dates,
+                        q_min[lex],
+                        q_max[lex],
+                        alpha=0.15)
+
+        ax.set_title(lex.capitalize())
+        ax.set_ylim(ymin, ymax)
+        ax.grid(True)
+        if i >= 3:    ax.set_xlabel("Date")
+        if i % 3 == 0: ax.set_ylabel("Sentiment Score")
+
+    # remove the empty subplot
+    fig.delaxes(axs[-1])
+
+    fig.suptitle(f"Quarterly Ashwin Lexica Sentiment — {labels[code]}", fontsize=16)
+    fig.tight_layout(rect=[0,0,1,0.96])
+    plt.legend(loc='upper right', bbox_to_anchor=(1.25,1))
+    plt.show()
+
+
+# ——— Per‑Country EPU Lines ———
+for code in codes:
+    fig, ax = plt.subplots(figsize=(10,5))
+    ax.plot(epu_quarterly['date'], epu_quarterly[code], label=labels[code])
+
+    ax.set_title(f"Quarterly Policy Uncertainty Index — {labels[code]}")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("EPU Index")
+    ax.grid(True)
+    ax.legend()
+    plt.tight_layout()
+    plt.show()
 #%% Evaluation Methods
 
 # # ADF test function
@@ -1941,3 +2057,27 @@ loaded_data = joblib.load(r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master 
 globals().update(loaded_data)
 
 print("✅ All variables successfully loaded.")
+
+#%%
+for country in ["Germany", "France", "Spain", "Italy"]:
+    plot_forecasts_grouped_by_model(
+        country=country,
+        gdp_pre_dicts={
+            "epu": all_raw_outputs_gdp_epu_pre_covid,
+            "figas": all_raw_outputs_gdp_figas_pre_covid
+        },
+        inf_pre_dicts={
+            "epu": all_raw_outputs_inf_epu_pre_covid,
+            "figas": all_raw_outputs_inf_figas_pre_covid
+        },
+        gdp_post_dicts={
+            "epu": all_raw_outputs_gdp_epu,
+            "figas": all_raw_outputs_gdp_figas
+        },
+        inf_post_dicts={
+            "epu": all_raw_outputs_inf_epu,
+            "figas": all_raw_outputs_inf_figas
+        },
+        ashwin_dict_gdp=all_raw_outputs_gdp_ashwin_indiv,
+        ashwin_dict_inf=all_raw_outputs_inf_ashwin_indiv
+    )
