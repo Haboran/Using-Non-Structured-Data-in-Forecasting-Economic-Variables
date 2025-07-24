@@ -1,0 +1,796 @@
+% === Germany — Single-model RMSEs (post-COVID, absolute) ===
+\begin{table}
+\caption{Post-COVID single-model RMSEs for Germany (absolute)}
+\label{tab:germany_rmse_single_post_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+ARIMA & 0.0286 & 0.0306 & 0.6073 & 0.7936 \\
+ARIMAX & 0.0307 & 0.0295 & 0.6127 & 0.8123 \\
+U-MIDAS & 0.0257 & 0.0349 & 0.6310 & 0.8167 \\
+LASSO & 0.0276 & 0.0279 & 0.5959 & 0.8117 \\
+RF & 0.0267 & 0.0341 & 0.6033 & 0.8358 \\
+MIDAS-Net & 1.0217 & 0.7557 & 0.6553 & 0.8090 \\
+r-MIDAS & 0.0276 & 0.0303 & 0.6060 & 0.8275 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === France — Single-model RMSEs (post-COVID, absolute) ===
+\begin{table}
+\caption{Post-COVID single-model RMSEs for France (absolute)}
+\label{tab:france_rmse_single_post_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+ARIMA & 0.0374 & 0.0476 & 0.3732 & 0.4704 \\
+ARIMAX & 0.0377 & 0.0420 & 0.3690 & 0.4747 \\
+U-MIDAS & 0.0368 & 0.0489 & 0.4570 & 0.4785 \\
+LASSO & 0.0363 & 0.0399 & 0.3755 & 0.4835 \\
+RF & 0.0371 & 0.0368 & 0.4104 & 0.5087 \\
+MIDAS-Net & 1.4038 & 0.4179 & 0.6116 & 0.5067 \\
+r-MIDAS & 0.0367 & 0.0474 & 0.3648 & 0.4796 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Spain — Single-model RMSEs (post-COVID, absolute) ===
+\begin{table}
+\caption{Post-COVID single-model RMSEs for Spain (absolute)}
+\label{tab:spain_rmse_single_post_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+ARIMA & 0.0608 & 0.0623 & 0.6193 & 0.8939 \\
+ARIMAX & 0.0634 & 0.0170 & 0.6213 & 0.8962 \\
+U-MIDAS & 0.0725 & 0.0316 & 0.7393 & 0.9015 \\
+LASSO & 0.0614 & 0.0185 & 0.6318 & 0.8893 \\
+RF & 0.0600 & 0.0148 & 0.6448 & 0.9137 \\
+MIDAS-Net & 1.2034 & 0.6466 & 0.7178 & 0.9440 \\
+r-MIDAS & 0.0617 & 0.0230 & 0.6477 & 0.8999 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Italy — Single-model RMSEs (post-COVID, absolute) ===
+\begin{table}
+\caption{Post-COVID single-model RMSEs for Italy (absolute)}
+\label{tab:italy_rmse_single_post_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+ARIMA & 0.0461 & 0.0597 & 0.4603 & 0.9133 \\
+ARIMAX & 0.0462 & 0.0609 & 0.4601 & 0.8929 \\
+U-MIDAS & 0.0504 & 0.0544 & 0.5060 & 0.9048 \\
+LASSO & 0.0471 & 0.0508 & 0.4927 & 0.8963 \\
+RF & 0.0463 & 0.0445 & 0.5170 & 0.9533 \\
+MIDAS-Net & 0.9428 & 0.4472 & 0.5263 & 0.9348 \\
+r-MIDAS & 0.0474 & 0.0548 & 0.4824 & 0.9047 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Germany — Combination-model RMSEs (post-COVID, absolute) ===
+\begin{table}
+\caption{Post-COVID combination RMSEs for Germany (absolute)}
+\label{tab:germany_rmse_combo_post_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0284 & 0.0297 & 0.6020 & 0.7875 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0283 & 0.0297 & 0.6020 & 0.7876 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0267 & 0.0298 & 0.5945 & 0.8047 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0267 & 0.0296 & 0.5943 & 0.8046 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0272 & -- & 0.5975 & 0.7967 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0271 & -- & 0.5974 & 0.7968 \\
+Comb3 Lasso RMIDAS RF (unw) & -- & 0.0297 & -- & -- \\
+Comb3 Lasso RMIDAS RF (wtd) & -- & 0.0295 & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === France — Combination-model RMSEs (post-COVID, absolute) ===
+\begin{table}
+\caption{Post-COVID combination RMSEs for France (absolute)}
+\label{tab:france_rmse_combo_post_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0373 & 0.0391 & 0.3727 & 0.4794 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0373 & 0.0388 & 0.3722 & 0.4790 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0366 & 0.0429 & 0.3899 & 0.4772 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0366 & 0.0426 & 0.3871 & 0.4771 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0366 & -- & 0.3733 & 0.4833 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0366 & -- & 0.3727 & 0.4831 \\
+Comb3 Lasso RMIDAS RF (unw) & -- & 0.0407 & -- & -- \\
+Comb3 Lasso RMIDAS RF (wtd) & -- & 0.0403 & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Spain — Combination-model RMSEs (post-COVID, absolute) ===
+\begin{table}
+\caption{Post-COVID combination RMSEs for Spain (absolute)}
+\label{tab:spain_rmse_combo_post_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0609 & 0.0267 & 0.6192 & 0.8893 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0609 & 0.0159 & 0.6191 & 0.8893 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0639 & 0.0313 & 0.6443 & 0.8886 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0635 & 0.0231 & 0.6410 & 0.8886 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0609 & -- & 0.6364 & 0.8931 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0609 & -- & 0.6363 & 0.8931 \\
+Comb3 Lasso RMIDAS RF (unw) & -- & 0.0145 & -- & -- \\
+Comb3 Lasso RMIDAS RF (wtd) & -- & 0.0141 & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Italy — Combination-model RMSEs (post-COVID, absolute) ===
+\begin{table}
+\caption{Post-COVID combination RMSEs for Italy (absolute)}
+\label{tab:italy_rmse_combo_post_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0473 & 0.0513 & 0.4760 & 0.9146 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0473 & 0.0502 & 0.4749 & 0.9140 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0481 & 0.0506 & 0.4727 & 0.9001 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0480 & 0.0505 & 0.4723 & 0.9000 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0473 & -- & 0.4922 & 0.9070 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0473 & -- & 0.4918 & 0.9064 \\
+Comb3 Lasso RMIDAS RF (unw) & -- & 0.0493 & -- & -- \\
+Comb3 Lasso RMIDAS RF (wtd) & -- & 0.0489 & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Germany — Single-model RMSEs (pre-COVID, absolute) ===
+\begin{table}
+\caption{Pre-COVID single-model RMSEs for Germany (absolute)}
+\label{tab:germany_rmse_single_pre_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+ARIMA & 0.0093 & 0.0079 & 0.4104 & 0.4104 \\
+ARIMAX & 0.0094 & 0.0058 & 0.4203 & 0.4138 \\
+U-MIDAS & 0.0106 & 0.0072 & 0.5038 & 0.3855 \\
+LASSO & 0.0067 & 0.0053 & 0.3753 & 0.3975 \\
+RF & 0.0054 & 0.0052 & 0.4073 & 0.3855 \\
+MIDAS-Net & 0.3283 & 0.3101 & 0.4840 & 0.4971 \\
+r-MIDAS & 0.0057 & 0.0068 & 0.3793 & 0.3868 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === France — Single-model RMSEs (pre-COVID, absolute) ===
+\begin{table}
+\caption{Pre-COVID single-model RMSEs for France (absolute)}
+\label{tab:france_rmse_single_pre_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+ARIMA & 0.0052 & 0.0054 & 0.2485 & 0.2485 \\
+ARIMAX & 0.0052 & 0.0059 & 0.2487 & 0.2510 \\
+U-MIDAS & 0.0058 & 0.0085 & 0.3556 & 0.2598 \\
+LASSO & 0.0051 & 0.0057 & 0.2517 & 0.2492 \\
+RF & 0.0047 & 0.0062 & 0.2647 & 0.2608 \\
+MIDAS-Net & 0.7463 & 0.3450 & 0.6494 & 0.3253 \\
+r-MIDAS & 0.0045 & 0.0065 & 0.2584 & 0.2609 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Spain — Single-model RMSEs (pre-COVID, absolute) ===
+\begin{table}
+\caption{Pre-COVID single-model RMSEs for Spain (absolute)}
+\label{tab:spain_rmse_single_pre_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+ARIMA & 0.0044 & 0.0055 & 0.4353 & 0.4521 \\
+ARIMAX & 0.0049 & 0.0043 & 0.4596 & 0.4651 \\
+U-MIDAS & 0.0135 & 0.0075 & 0.5798 & 0.4639 \\
+LASSO & 0.0079 & 0.0055 & 0.4387 & 0.4599 \\
+RF & 0.0063 & 0.0068 & 0.4454 & 0.5108 \\
+MIDAS-Net & 0.8120 & 0.3282 & 0.5398 & 0.4922 \\
+r-MIDAS & 0.0089 & 0.0056 & 0.4251 & 0.4633 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Italy — Single-model RMSEs (pre-COVID, absolute) ===
+\begin{table}
+\caption{Pre-COVID single-model RMSEs for Italy (absolute)}
+\label{tab:italy_rmse_single_pre_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+ARIMA & 0.0039 & 0.0042 & 0.2974 & 0.2974 \\
+ARIMAX & 0.0040 & 0.0033 & 0.3004 & 0.2988 \\
+U-MIDAS & 0.0090 & 0.0039 & 0.4084 & 0.3018 \\
+LASSO & 0.0038 & 0.0032 & 0.2969 & 0.2982 \\
+RF & 0.0071 & 0.0044 & 0.2977 & 0.3071 \\
+MIDAS-Net & 1.9084 & 0.4563 & 0.5881 & 0.3150 \\
+r-MIDAS & 0.0052 & 0.0034 & 0.3000 & 0.3016 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Germany — Combination-model RMSEs (pre-COVID, absolute) ===
+\begin{table}
+\caption{Pre-COVID combination RMSEs for Germany (absolute)}
+\label{tab:germany_rmse_combo_pre_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0072 & 0.0054 & 0.4048 & 0.3945 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0065 & 0.0053 & 0.4047 & 0.3939 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0071 & 0.0060 & 0.3980 & 0.3932 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0067 & 0.0058 & 0.3939 & 0.3929 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0050 & -- & 0.3813 & 0.3827 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0050 & -- & 0.3808 & 0.3826 \\
+Comb3 Lasso RMIDAS RF (unw) & -- & 0.0055 & -- & -- \\
+Comb3 Lasso RMIDAS RF (wtd) & -- & 0.0054 & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === France — Combination-model RMSEs (pre-COVID, absolute) ===
+\begin{table}
+\caption{Pre-COVID combination RMSEs for France (absolute)}
+\label{tab:france_rmse_combo_pre_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0048 & 0.0056 & 0.2514 & 0.2509 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0048 & 0.0056 & 0.2513 & 0.2508 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0050 & 0.0061 & 0.2719 & 0.2515 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0050 & 0.0059 & 0.2656 & 0.2514 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0045 & -- & 0.2558 & 0.2542 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0045 & -- & 0.2557 & 0.2541 \\
+Comb3 Lasso RMIDAS RF (unw) & -- & 0.0061 & -- & -- \\
+Comb3 Lasso RMIDAS RF (wtd) & -- & 0.0060 & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Spain — Combination-model RMSEs (pre-COVID, absolute) ===
+\begin{table}
+\caption{Pre-COVID combination RMSEs for Spain (absolute)}
+\label{tab:spain_rmse_combo_pre_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0046 & 0.0051 & 0.4390 & 0.4656 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0045 & 0.0049 & 0.4388 & 0.4649 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0072 & 0.0057 & 0.4503 & 0.4572 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0057 & 0.0056 & 0.4448 & 0.4571 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0071 & -- & 0.4323 & 0.4658 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0069 & -- & 0.4322 & 0.4650 \\
+Comb3 Lasso RMIDAS RF (unw) & -- & 0.0059 & -- & -- \\
+Comb3 Lasso RMIDAS RF (wtd) & -- & 0.0058 & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Italy — Combination-model RMSEs (pre-COVID, absolute) ===
+\begin{table}
+\caption{Pre-COVID combination RMSEs for Italy (absolute)}
+\label{tab:italy_rmse_combo_pre_abs}
+\begin{tabular}{lrrrr}
+\toprule
+ & GDP Figas & GDP EPU & INF Figas & INF EPU \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0037 & 0.0029 & 0.2925 & 0.2966 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0034 & 0.0029 & 0.2925 & 0.2966 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0049 & 0.0027 & 0.3137 & 0.2989 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0041 & 0.0028 & 0.3084 & 0.2989 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0042 & -- & 0.2923 & 0.2980 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0038 & -- & 0.2923 & 0.2980 \\
+Comb3 Lasso RMIDAS RF (unw) & -- & 0.0035 & -- & -- \\
+Comb3 Lasso RMIDAS RF (wtd) & -- & 0.0035 & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Germany — Ashwin GDP (single, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP RMSEs for Germany (absolute)}
+\label{tab:germany_ashwin_gdp_post_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 0.0094 & 0.0094 & 0.0094 & 0.0094 & 0.0094 \\
+ARIMAX & 0.0073 & 0.0089 & 0.0069 & 0.0068 & 0.0068 \\
+U-MIDAS & 0.0069 & 0.0064 & 0.0053 & 0.0058 & 0.0061 \\
+LASSO & 0.0056 & 0.0055 & 0.0059 & 0.0055 & 0.0060 \\
+RF & 0.0074 & 0.0074 & 0.0067 & 0.0074 & 0.0086 \\
+MIDAS-Net & 0.3073 & 0.2726 & 0.2808 & 0.2747 & 0.1501 \\
+r-MIDAS & 0.0062 & 0.0060 & 0.0062 & 0.0063 & 0.0064 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Germany — Ashwin GDP (single, relative) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP RMSEs for Germany (relative to ARIMA)}
+\label{tab:germany_ashwin_gdp_post_rel}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 1.00 & 1.00 & 1.00 & 1.00 & 1.00 \\
+ARIMAX & 0.78 & 0.95 & 0.73 & 0.72 & 0.73 \\
+U-MIDAS & 0.73 & 0.69 & 0.56 & 0.62 & 0.65 \\
+LASSO & 0.59 & 0.59 & 0.63 & 0.59 & 0.64 \\
+RF & 0.79 & 0.79 & 0.71 & 0.79 & 0.92 \\
+MIDAS-Net & 32.77 & 29.06 & 29.94 & 29.29 & 16.00 \\
+r-MIDAS & 0.67 & 0.64 & 0.67 & 0.68 & 0.68 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Germany — Ashwin GDP (combo, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP combo RMSEs for Germany (absolute)}
+\label{tab:germany_ashwin_gdp_post_combo_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0075 & 0.0079 & 0.0070 & 0.0073 & 0.0076 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0074 & 0.0078 & 0.0068 & 0.0072 & 0.0075 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0065 & 0.0066 & 0.0064 & 0.0063 & 0.0065 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0063 & 0.0063 & 0.0060 & 0.0060 & 0.0062 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0062 & 0.0061 & 0.0061 & 0.0063 & 0.0069 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0061 & 0.0060 & 0.0061 & 0.0062 & 0.0067 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Germany — Ashwin GDP (combo, relative) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP combo RMSEs for Germany (relative to ARIMA)}
+\label{tab:germany_ashwin_gdp_post_combo_rel}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.80 & 0.84 & 0.74 & 0.78 & 0.81 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.79 & 0.83 & 0.73 & 0.76 & 0.79 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.70 & 0.70 & 0.68 & 0.68 & 0.69 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.67 & 0.67 & 0.64 & 0.64 & 0.66 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.66 & 0.65 & 0.65 & 0.67 & 0.74 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.65 & 0.64 & 0.65 & 0.66 & 0.72 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Germany — Ashwin INF (single, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin INF RMSEs for Germany (absolute)}
+\label{tab:germany_ashwin_inf_post_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 0.4061 & 0.4061 & 0.4061 & 0.4061 & 0.4061 \\
+ARIMAX & 0.4071 & 0.4086 & 0.4055 & 0.4058 & 0.4059 \\
+U-MIDAS & 0.6545 & 0.4359 & 0.5508 & 0.4868 & 0.5355 \\
+LASSO & 0.3996 & 0.3867 & 0.4024 & 0.4055 & 0.4076 \\
+RF & 0.3839 & 0.3631 & 0.3998 & 0.4122 & 0.4116 \\
+MIDAS-Net & 0.4855 & 0.4730 & 0.5498 & 0.4705 & 0.5469 \\
+r-MIDAS & 0.3681 & 0.3691 & 0.3705 & 0.3705 & 0.3712 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Germany — Ashwin INF (combo, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin INF combo RMSEs for Germany (absolute)}
+\label{tab:germany_ashwin_inf_post_combo_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.3913 & 0.3878 & 0.3974 & 0.3974 & 0.3975 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.3907 & 0.3862 & 0.3974 & 0.3974 & 0.3976 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.4482 & 0.3914 & 0.4047 & 0.3854 & 0.4187 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.4297 & 0.3910 & 0.4003 & 0.3853 & 0.4142 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.3734 & 0.3650 & 0.3818 & 0.3854 & 0.3856 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.3730 & 0.3646 & 0.3813 & 0.3848 & 0.3850 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === France — Ashwin GDP (single, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP RMSEs for France (absolute)}
+\label{tab:france_ashwin_gdp_post_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 0.0067 & 0.0067 & 0.0067 & 0.0067 & 0.0067 \\
+ARIMAX & 0.0056 & 0.0073 & 0.0049 & 0.0050 & 0.0048 \\
+U-MIDAS & 0.0036 & 0.0043 & 0.0041 & 0.0036 & 0.0041 \\
+LASSO & 0.0046 & 0.0047 & 0.0040 & 0.0040 & 0.0042 \\
+RF & 0.0055 & 0.0055 & 0.0050 & 0.0060 & 0.0053 \\
+MIDAS-Net & 0.2188 & 0.4493 & 0.4377 & 0.3725 & 0.3829 \\
+r-MIDAS & 0.0043 & 0.0048 & 0.0044 & 0.0046 & 0.0045 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === France — Ashwin GDP (single, relative) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP RMSEs for France (relative to ARIMA)}
+\label{tab:france_ashwin_gdp_post_rel}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 1.00 & 1.00 & 1.00 & 1.00 & 1.00 \\
+ARIMAX & 0.83 & 1.09 & 0.73 & 0.75 & 0.71 \\
+U-MIDAS & 0.54 & 0.64 & 0.61 & 0.54 & 0.62 \\
+LASSO & 0.69 & 0.70 & 0.60 & 0.60 & 0.63 \\
+RF & 0.82 & 0.82 & 0.75 & 0.89 & 0.79 \\
+MIDAS-Net & 32.69 & 67.13 & 65.39 & 55.66 & 57.20 \\
+r-MIDAS & 0.65 & 0.72 & 0.66 & 0.68 & 0.67 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === France — Ashwin GDP (combo, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP combo RMSEs for France (absolute)}
+\label{tab:france_ashwin_gdp_post_combo_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0053 & 0.0055 & 0.0055 & 0.0058 & 0.0055 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0052 & 0.0053 & 0.0054 & 0.0057 & 0.0054 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0047 & 0.0044 & 0.0048 & 0.0046 & 0.0049 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0044 & 0.0043 & 0.0045 & 0.0043 & 0.0046 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0045 & 0.0047 & 0.0044 & 0.0047 & 0.0046 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0045 & 0.0047 & 0.0044 & 0.0046 & 0.0046 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === France — Ashwin GDP (combo, relative) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP combo RMSEs for France (relative to ARIMA)}
+\label{tab:france_ashwin_gdp_post_combo_rel}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.79 & 0.82 & 0.82 & 0.87 & 0.83 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.78 & 0.80 & 0.80 & 0.86 & 0.81 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.70 & 0.66 & 0.71 & 0.69 & 0.73 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.66 & 0.65 & 0.68 & 0.64 & 0.69 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.68 & 0.70 & 0.66 & 0.70 & 0.69 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.67 & 0.70 & 0.65 & 0.68 & 0.68 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === France — Ashwin INF (single, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin INF RMSEs for France (absolute)}
+\label{tab:france_ashwin_inf_post_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 0.2667 & 0.2667 & 0.2667 & 0.2667 & 0.2667 \\
+ARIMAX & 0.2661 & 0.2664 & 0.2651 & 0.2654 & 0.2651 \\
+U-MIDAS & 0.4184 & 0.3745 & 0.4066 & 0.4197 & 0.4092 \\
+LASSO & 0.2738 & 0.2758 & 0.2763 & 0.2808 & 0.2808 \\
+RF & 0.2813 & 0.3396 & 0.2708 & 0.2812 & 0.3115 \\
+MIDAS-Net & 1.0105 & 1.0612 & 0.9651 & 0.9598 & 0.9762 \\
+r-MIDAS & 0.2801 & 0.2779 & 0.2805 & 0.2808 & 0.2815 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === France — Ashwin INF (combo, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin INF combo RMSEs for France (absolute)}
+\label{tab:france_ashwin_inf_post_combo_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.2642 & 0.2876 & 0.2622 & 0.2577 & 0.2785 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.2642 & 0.2845 & 0.2622 & 0.2579 & 0.2773 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.2836 & 0.2786 & 0.2631 & 0.2974 & 0.3003 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.2756 & 0.2746 & 0.2591 & 0.2881 & 0.2914 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.2689 & 0.2915 & 0.2686 & 0.2660 & 0.2863 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.2689 & 0.2890 & 0.2685 & 0.2660 & 0.2858 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Spain — Ashwin GDP (single, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP RMSEs for Spain (absolute)}
+\label{tab:spain_ashwin_gdp_post_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 0.0051 & 0.0051 & 0.0051 & 0.0051 & 0.0051 \\
+ARIMAX & 0.0051 & 0.0051 & 0.0048 & 0.0047 & 0.0048 \\
+U-MIDAS & 0.0102 & 0.0056 & 0.0104 & 0.0112 & 0.0097 \\
+LASSO & 0.0095 & 0.0073 & 0.0060 & 0.0056 & 0.0057 \\
+RF & 0.0071 & 0.0071 & 0.0067 & 0.0064 & 0.0065 \\
+MIDAS-Net & 0.2437 & 0.5885 & 0.8086 & 0.6924 & 0.7900 \\
+r-MIDAS & 0.0074 & 0.0062 & 0.0063 & 0.0061 & 0.0060 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Spain — Ashwin GDP (single, relative) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP RMSEs for Spain (relative to ARIMA)}
+\label{tab:spain_ashwin_gdp_post_rel}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 1.00 & 1.00 & 1.00 & 1.00 & 1.00 \\
+ARIMAX & 1.00 & 1.00 & 0.95 & 0.93 & 0.93 \\
+U-MIDAS & 2.00 & 1.11 & 2.05 & 2.21 & 1.90 \\
+LASSO & 1.86 & 1.43 & 1.18 & 1.11 & 1.11 \\
+RF & 1.39 & 1.39 & 1.32 & 1.26 & 1.28 \\
+MIDAS-Net & 47.93 & 115.75 & 159.03 & 136.19 & 155.37 \\
+r-MIDAS & 1.46 & 1.21 & 1.24 & 1.21 & 1.18 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Spain — Ashwin GDP (combo, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP combo RMSEs for Spain (absolute)}
+\label{tab:spain_ashwin_gdp_post_combo_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0054 & 0.0052 & 0.0051 & 0.0052 & 0.0051 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0053 & 0.0051 & 0.0051 & 0.0052 & 0.0050 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0073 & 0.0056 & 0.0062 & 0.0062 & 0.0062 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0064 & 0.0054 & 0.0056 & 0.0054 & 0.0057 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0075 & 0.0065 & 0.0060 & 0.0059 & 0.0059 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0074 & 0.0065 & 0.0060 & 0.0058 & 0.0059 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Spain — Ashwin GDP (combo, relative) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP combo RMSEs for Spain (relative to ARIMA)}
+\label{tab:spain_ashwin_gdp_post_combo_rel}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 1.07 & 1.01 & 1.01 & 1.03 & 1.00 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 1.05 & 1.00 & 1.00 & 1.01 & 0.99 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 1.44 & 1.10 & 1.22 & 1.22 & 1.22 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 1.26 & 1.06 & 1.11 & 1.07 & 1.12 \\
+Comb3 LASSO RMIDAS RF (unw) & 1.48 & 1.28 & 1.19 & 1.15 & 1.15 \\
+Comb3 LASSO RMIDAS RF (wtd) & 1.46 & 1.27 & 1.18 & 1.15 & 1.15 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Spain — Ashwin INF (single, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin INF RMSEs for Spain (absolute)}
+\label{tab:spain_ashwin_inf_post_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 0.4662 & 0.4662 & 0.4662 & 0.4662 & 0.4662 \\
+ARIMAX & 0.4681 & 0.4684 & 0.4683 & 0.4687 & 0.4681 \\
+U-MIDAS & 0.7519 & 0.6841 & 1.0530 & 0.8196 & 0.7868 \\
+LASSO & 0.4731 & 0.4712 & 0.4735 & 0.4729 & 0.4717 \\
+RF & 0.4802 & 0.5190 & 0.5581 & 0.5534 & 0.6180 \\
+MIDAS-Net & 0.7342 & 0.8439 & 1.0163 & 0.9928 & 0.9588 \\
+r-MIDAS & 0.4710 & 0.4696 & 0.4721 & 0.4731 & 0.4712 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Spain — Ashwin INF (combo, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin INF combo RMSEs for Spain (absolute)}
+\label{tab:spain_ashwin_inf_post_combo_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.4580 & 0.4779 & 0.4779 & 0.4700 & 0.4997 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.4580 & 0.4770 & 0.4755 & 0.4687 & 0.4925 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.5145 & 0.4818 & 0.5872 & 0.5132 & 0.5174 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.4950 & 0.4722 & 0.5172 & 0.4872 & 0.4938 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.4610 & 0.4791 & 0.4799 & 0.4728 & 0.5015 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.4610 & 0.4782 & 0.4779 & 0.4717 & 0.4947 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Italy — Ashwin GDP (single, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP RMSEs for Italy (absolute)}
+\label{tab:italy_ashwin_gdp_post_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 0.0043 & 0.0043 & 0.0043 & 0.0043 & 0.0043 \\
+ARIMAX & 0.0035 & 0.0041 & 0.0029 & 0.0027 & 0.0027 \\
+U-MIDAS & 0.0048 & 0.0057 & 0.0053 & 0.0049 & 0.0057 \\
+LASSO & 0.0042 & 0.0048 & 0.0029 & 0.0026 & 0.0029 \\
+RF & 0.0043 & 0.0047 & 0.0047 & 0.0041 & 0.0047 \\
+MIDAS-Net & 0.2582 & 0.3529 & 0.8520 & 0.7579 & 0.6971 \\
+r-MIDAS & 0.0041 & 0.0048 & 0.0036 & 0.0033 & 0.0032 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Italy — Ashwin GDP (single, relative) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP RMSEs for Italy (relative to ARIMA)}
+\label{tab:italy_ashwin_gdp_post_rel}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 1.00 & 1.00 & 1.00 & 1.00 & 1.00 \\
+ARIMAX & 0.82 & 0.94 & 0.68 & 0.62 & 0.62 \\
+U-MIDAS & 1.12 & 1.32 & 1.23 & 1.13 & 1.32 \\
+LASSO & 0.97 & 1.10 & 0.67 & 0.61 & 0.66 \\
+RF & 0.99 & 1.08 & 1.08 & 0.95 & 1.08 \\
+MIDAS-Net & 59.75 & 81.66 & 197.19 & 175.40 & 161.32 \\
+r-MIDAS & 0.94 & 1.10 & 0.83 & 0.76 & 0.74 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Italy — Ashwin GDP (combo, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP combo RMSEs for Italy (absolute)}
+\label{tab:italy_ashwin_gdp_post_combo_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.0031 & 0.0031 & 0.0028 & 0.0029 & 0.0031 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.0031 & 0.0032 & 0.0028 & 0.0028 & 0.0030 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.0031 & 0.0033 & 0.0020 & 0.0025 & 0.0027 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.0031 & 0.0031 & 0.0021 & 0.0024 & 0.0026 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.0041 & 0.0046 & 0.0035 & 0.0030 & 0.0034 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.0041 & 0.0046 & 0.0034 & 0.0029 & 0.0032 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Italy — Ashwin GDP (combo, relative) ===
+\begin{table}
+\caption{Post-COVID Ashwin GDP combo RMSEs for Italy (relative to ARIMA)}
+\label{tab:italy_ashwin_gdp_post_combo_rel}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.72 & 0.73 & 0.65 & 0.66 & 0.72 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.72 & 0.74 & 0.64 & 0.65 & 0.70 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.72 & 0.76 & 0.47 & 0.58 & 0.64 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.71 & 0.72 & 0.49 & 0.56 & 0.61 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.95 & 1.06 & 0.81 & 0.70 & 0.78 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.95 & 1.06 & 0.78 & 0.68 & 0.75 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Italy — Ashwin INF (single, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin INF RMSEs for Italy (absolute)}
+\label{tab:italy_ashwin_inf_post_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+ARIMA & 0.3135 & 0.3135 & 0.3135 & 0.3135 & 0.3135 \\
+ARIMAX & 0.3146 & 0.3144 & 0.3153 & 0.3154 & 0.3153 \\
+U-MIDAS & 0.4962 & 0.4621 & 0.5765 & 0.5404 & 0.5819 \\
+LASSO & 0.3188 & 0.3188 & 0.3188 & 0.3189 & 0.3187 \\
+RF & 0.3332 & 0.3623 & 0.3806 & 0.3751 & 0.3636 \\
+MIDAS-Net & 0.5644 & 0.6400 & 0.8634 & 0.6916 & 0.6681 \\
+r-MIDAS & 0.3160 & 0.3165 & 0.3219 & 0.3198 & 0.3183 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% === Italy — Ashwin INF (combo, absolute) ===
+\begin{table}
+\caption{Post-COVID Ashwin INF combo RMSEs for Italy (absolute)}
+\label{tab:italy_ashwin_inf_post_combo_abs}
+\begin{tabular}{lccccc}
+\toprule
+ & loughran & stability & afinn & vader & econlex \\
+\midrule
+Comb1 ARIMA ARIMAX RF (unw) & 0.3167 & 0.3264 & 0.3331 & 0.3265 & 0.3186 \\
+Comb1 ARIMA ARIMAX RF (wtd) & 0.3166 & 0.3252 & 0.3308 & 0.3249 & 0.3180 \\
+Comb2 UMIDAS LASSO ARIMA (unw) & 0.3545 & 0.3328 & 0.3616 & 0.3569 & 0.3676 \\
+Comb2 UMIDAS LASSO ARIMA (wtd) & 0.3414 & 0.3253 & 0.3388 & 0.3389 & 0.3430 \\
+Comb3 LASSO RMIDAS RF (unw) & 0.3166 & 0.3256 & 0.3334 & 0.3270 & 0.3188 \\
+Comb3 LASSO RMIDAS RF (wtd) & 0.3165 & 0.3245 & 0.3314 & 0.3256 & 0.3182 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
