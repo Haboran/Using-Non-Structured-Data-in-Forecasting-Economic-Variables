@@ -5,12 +5,16 @@ Created on Mon May  5 08:48:30 2025
 @author: oskar
 """
 
+
+'''Main NLP Pipeline: Loads data, preprocesses text, extracts features, trains models, and evaluates forecasts.'''
 #%%
+'''Environment setup: clear workspace and reset Python state.''' 
 from IPython import get_ipython
 get_ipython().run_line_magic('reset', '-sf')
 get_ipython().run_line_magic('clear', '/')
 
 #%%
+'''Import libraries: data handling, plotting, modeling, and system utilities.''' 
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -22,10 +26,10 @@ import joblib
 from pmdarima import auto_arima
 from statsmodels.tools.sm_exceptions import ConvergenceWarning
 from pandas.tseries.offsets import MonthEnd, QuarterEnd
-from statsmodels.tsa.seasonal import seasonal_decompose
+
 
 #%%
-
+'''Load functions to run sentiment-based forecasts at different time resolutions: quarterly→daily, quarterly→monthly, monthly→daily, and monthly→monthly'''
 # Path to your helper functions directory
 helper_path = r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Coding\Code"
 
@@ -43,6 +47,7 @@ from Functions import heatmap_on_ax
 from Functions import plot_forecasts_grouped_by_model
 
 #%%
+'''Utility series transformation: apply log, difference, or log–difference to a time series based on the chosen method'''
 # Utility function for transforming time series data
 def transform_series(series, method='log_diff'):
     """
@@ -64,12 +69,12 @@ def transform_series(series, method='log_diff'):
     else:
         raise ValueError("Choose from 'log', 'diff', or 'log_diff'")
 
-
-
 #%% 
+'''Define lag lengths: how many past days/months/quarters to include for each data frequency conversion'''
 #  Forecast horizon:
 h = 1
 
+# lags for different time series
 lag_qu_day = 90
 lag_month_day = 30
 lag_quarter_month = 3
@@ -86,11 +91,14 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
 #%%
+'''Load, clean, and reshape GDP time series: read CSV, filter for market‐price and seasonally adjusted data, 
+average duplicates by date and country, and pivot into a wide format with each country as its own column'''
+
 df = pd.read_csv(r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\estat_namq_10_gdp_filtered_en (4).csv")
 df['TIME_PERIOD'] = pd.to_datetime(df['TIME_PERIOD'])  # Convert to datetime
 
 
-#%% Filter GDP data to relevant entries
+# Filter GDP data to relevant entries
 # First: focus on GDP at market prices
 gdp_df = df[df['na_item'] == 'Gross domestic product at market prices']
 
@@ -107,20 +115,20 @@ gdp_df['TIME_PERIOD'] = pd.to_datetime(gdp_df['TIME_PERIOD'])
 gdp_data = gdp_df.pivot(index='TIME_PERIOD', columns='geo', values='OBS_VALUE')
 
 #%%
-# First: focus on GDP at market prices
-wage_df = df[df['na_item'] == 'Wages and salaries']
+# # First: focus on GDP at market prices
+# wage_df = df[df['na_item'] == 'Wages and salaries']
 
-# Further restrict to seasonally and calendar adjusted data
-wage_df = wage_df[wage_df['s_adj'] == 'Unadjusted data (i.e. neither seasonally adjusted nor calendar adjusted data)']
+# # Further restrict to seasonally and calendar adjusted data
+# wage_df = wage_df[wage_df['s_adj'] == 'Unadjusted data (i.e. neither seasonally adjusted nor calendar adjusted data)']
 
-# Remove duplicates and average values if multiple entries exist
-wage_df = wage_df.groupby(['TIME_PERIOD', 'geo'])['OBS_VALUE'].mean().reset_index()
+# # Remove duplicates and average values if multiple entries exist
+# wage_df = wage_df.groupby(['TIME_PERIOD', 'geo'])['OBS_VALUE'].mean().reset_index()
 
-# Ensure datetime format for merging later
-wage_df['TIME_PERIOD'] = pd.to_datetime(wage_df['TIME_PERIOD'])
+# # Ensure datetime format for merging later
+# wage_df['TIME_PERIOD'] = pd.to_datetime(wage_df['TIME_PERIOD'])
 
-# Pivot to wide format: one column per country
-wage_data = wage_df.pivot(index='TIME_PERIOD', columns='geo', values='OBS_VALUE')
+# # Pivot to wide format: one column per country
+# wage_data = wage_df.pivot(index='TIME_PERIOD', columns='geo', values='OBS_VALUE')
 
 #%% Drop unwanted Euro area aggregate columns if present
 euro_areas_to_exclude = [
@@ -131,14 +139,14 @@ euro_areas_to_exclude = [
 ]
 
 gdp_data = gdp_data.drop(columns=[col for col in euro_areas_to_exclude if col in gdp_data.columns], errors='ignore')
-wage_data = wage_data.drop(columns=[col for col in euro_areas_to_exclude if col in wage_data.columns], errors='ignore')
+# wage_data = wage_data.drop(columns=[col for col in euro_areas_to_exclude if col in wage_data.columns], errors='ignore')
 # external_balance_data = gdp_data.drop(columns=[col for col in euro_areas_to_exclude if col in external_balance_data.columns], errors='ignore')
 
 # Limit data to post-1995 only
 gdp_data = gdp_data[gdp_data.index >= pd.to_datetime("1995-04-01")]
 gdp_data = gdp_data[gdp_data.index <= pd.to_datetime("2024-10-01")]
-wage_data = wage_data[wage_data.index >= pd.to_datetime("1995-04-01")]
-wage_data = wage_data[wage_data.index <= pd.to_datetime("2024-10-01")]
+# wage_data = wage_data[wage_data.index >= pd.to_datetime("1995-04-01")]
+# wage_data = wage_data[wage_data.index <= pd.to_datetime("2024-10-01")]
 gdp_data = gdp_data[gdp_data.index >= pd.to_datetime("1995-04-01")]
 gdp_data = gdp_data[gdp_data.index <= pd.to_datetime("2024-10-01")]
 
@@ -146,6 +154,11 @@ gdp_data = gdp_data[gdp_data.index <= pd.to_datetime("2024-10-01")]
 #%% 
 
 '''    Inflation - monthly '''
+
+'''Load and preprocess monthly inflation data: read the custom‐formatted Excel sheet, 
+remove blank columns and rows, transpose so dates index the rows and countries span columns, 
+convert to month‐end dates, drop duplicates, select Germany/Spain/France/Italy, 
+apply the chosen transformation, and plot their inflation time series.'''
 
 # 1. Point to your file
 file_path = r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Data\prc_hicp_manr__custom_16484139_spreadsheet.xlsx"
@@ -196,6 +209,9 @@ plt.show()
 #%%
 
 '''     Sentiments      '''
+
+'''Load and reshape daily sentiment data into a wide country‐topic table, convert dates, 
+then compute and timestamp quarterly and monthly average sentiment series at period ends.'''
 
 sentiment_df = pd.read_csv(
     r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Data\Barbaglia, L., Consoli, S., & Manzan, S. (2024)\eu_sentiments.csv", 
@@ -264,6 +280,9 @@ monthly_sentiment = monthly_sentiment.drop(columns='month')
 
 #%%
 
+'''Load specified Ashwin sentiment columns if present, clean and parse dates, rename to country–topic format, 
+then aggregate the daily series into quarterly and monthly averages with proper period-end timestamps'''
+
 # 0) Define the exact Ashwin sentiments in the file:
 ashwin_sentiment_cols = [
     'loughran_sum_fr', 'stability_sum_fr', 'afinn_sum_fr', 'vader_sum_fr', 'econlex_sum_fr',
@@ -271,7 +290,7 @@ ashwin_sentiment_cols = [
     'loughran_sum_it', 'stability_sum_it', 'afinn_sum_it', 'vader_sum_it', 'econlex_sum_it',
     'loughran_sum_sp', 'stability_sum_sp', 'afinn_sum_sp', 'vader_sum_sp', 'econlex_sum_sp'
 ]
-# ——————————————————————————————————————————
+
 
 # 1. Peek at header to confirm what's present
 header_df    = pd.read_csv(
@@ -349,6 +368,11 @@ ashwin_monthly_country_sentiment_df['date'] = (
 )
 
 #%% Load Europe Policy Uncertainty (EPU) data
+
+'''Load and process Europe Policy Uncertainty series: read the raw Excel sheet, 
+filter out non‐numeric rows, construct a monthly date index, map each country’s index to its ISO code, 
+limit the range to 1997–2024, then aggregate and timestamp both monthly and quarterly averages at period-end'''
+
 epu_path = r"C:/Users/oskar/Desktop/Uni/4. Mastersemester/Master Thesis/Data/Baker, S. R., Bloom, N., & Davis, S. J. (2016)/Europe_Policy_Uncertainty_Data.xlsx"
 # Read full sheet (wide format)
 epu_raw = pd.read_excel(epu_path)
@@ -413,41 +437,48 @@ plt.show()
 
 #%% Plot wage time series for each country
 
-wage_data.plot(figsize=(12, 6), title='Wage Over Time by Country')
-plt.xlabel('Date')
-plt.ylabel('GDP')
-plt.grid(True)
-plt.show()
+'''Plot and seasonally decompose wage series for each country: 
+    apply additive decomposition to extract trend and residual, optionally log‐difference the series, 
+    and visualize both the raw and transformed data'''
 
-
-log_wage_data = transform_series(wage_data, method='log_diff')
-
-for country in wage_data.columns:
-    try:
-        result = seasonal_decompose(wage_data[country].dropna(), model='additive', period=4, extrapolate_trend='freq')
-        wage_data[country] = result.trend + result.resid
-
-        
-        result2 = seasonal_decompose(log_wage_data[country].dropna(), model='additive', period=4, extrapolate_trend='freq')
-        log_wage_data[country] = result2.trend + result2.resid
-
-    except:
-        print(f"Skipping decomposition for {country} due to insufficient data or missing values.")
-        
-wage_data.plot(figsize=(12, 6), title='Wage Over Time by Country')
-plt.xlabel('Date')
-plt.ylabel('GDP')
-plt.grid(True)
-plt.show()
+# wage_data.plot(figsize=(12, 6), title='Wage Over Time by Country')
+# plt.xlabel('Date')
+# plt.ylabel('GDP')
+# plt.grid(True)
+# plt.show()
 
 
 # log_wage_data = transform_series(wage_data, method='log_diff')
-log_wage_data.plot(figsize=(12, 6), title='log Wage Over Time by Country')
-plt.xlabel('Date')
-plt.ylabel('GDP')
-plt.grid(True)
-plt.show()
+
+# for country in wage_data.columns:
+#     try:
+#         result = seasonal_decompose(wage_data[country].dropna(), model='additive', period=4, extrapolate_trend='freq')
+#         wage_data[country] = result.trend + result.resid
+
+        
+#         result2 = seasonal_decompose(log_wage_data[country].dropna(), model='additive', period=4, extrapolate_trend='freq')
+#         log_wage_data[country] = result2.trend + result2.resid
+
+#     except:
+#         print(f"Skipping decomposition for {country} due to insufficient data or missing values.")
+        
+# wage_data.plot(figsize=(12, 6), title='Wage Over Time by Country')
+# plt.xlabel('Date')
+# plt.ylabel('GDP')
+# plt.grid(True)
+# plt.show()
+
+
+# # log_wage_data = transform_series(wage_data, method='log_diff')
+# log_wage_data.plot(figsize=(12, 6), title='log Wage Over Time by Country')
+# plt.xlabel('Date')
+# plt.ylabel('GDP')
+# plt.grid(True)
+# plt.show()
 #%% Plot the Sentiments
+
+'''Visualize quarterly sentiment trends by topic: compute mean and min–max ranges per country, 
+then plot multi-panel charts showing all countries together and focused subsets with shaded bands indicating sentiment variability.'''
 
 # Reload sentiment data to make sure we're working from scratch
 sentiment_df = pd.read_csv(r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Data\Barbaglia, L., Consoli, S., & Manzan, S. (2024)\eu_sentiments.csv", parse_dates=['date'])
@@ -546,6 +577,9 @@ for label, countries in focus_sets.items():
     plt.show()
 
 #%%
+'''Aggregate daily Ashwin lexicon sentiment into quarterly mean/min/max scores and plot each lexicon’s country‐level trends, 
+then overlay quarterly policy uncertainty (EPU) indices by country on a separate time series chart'''
+
 # 1) Compute per-quarter mean / min / max for each code–lexicon
 lexica = ['loughran', 'stability', 'afinn', 'vader', 'econlex']
 codes  = ['DE','FR','ES','IT']
@@ -619,6 +653,10 @@ plt.tight_layout()
 plt.show()
 
 #%%
+'''Plot per-country sentiment and uncertainty: for each country, 
+draw a grid of quarterly Ashwin-lexica sentiment trends with shaded min–max bands, 
+followed by a line chart of its quarterly Policy Uncertainty Index (EPU)'''
+
 lexica = ['loughran', 'stability', 'afinn', 'vader', 'econlex']
 codes  = ['DE','FR','ES','IT']
 labels = {'DE':'Germany','FR':'France','ES':'Spain','IT':'Italy'}
@@ -679,6 +717,11 @@ for code in codes:
     plt.tight_layout()
     plt.show()
 #%% Evaluation Methods
+
+'''Stationarity analysis and ARMA configuration: 
+    define routines for running Augmented Dickey-Fuller tests and selecting ARMA(p,q) orders via AIC grid search, 
+    then apply a log-difference transform to the GDP series and plot the resulting time series.'''
+
 
 # # ADF test function
 # def adf_test(series, name=''):
@@ -751,7 +794,7 @@ wage_cutoff = pd.to_datetime("2022-06-30")
 
 # Trim GDP and wage data
 gdp_data_tmp = gdp_data[gdp_data.index < gdp_cutoff]
-wage_data = wage_data[wage_data.index < wage_cutoff]
+# wage_data = wage_data[wage_data.index < wage_cutoff]
 
 for country in gdp_data.columns:
     print(f"\n>>> {country} <<<")
@@ -813,6 +856,10 @@ for country in gdp_data.columns:
 
 #%%
 ''' Inf Figas'''
+
+'''Process pre-COVID monthly FIGAS inflation by country: filter series and sentiment to cutoff, 
+align dates (with special handling for Italy), auto-select ARIMA order, pick top-2 sentiment topics, 
+run the monthly–daily sentiment forecasting routine, and collect RMSE summaries and raw/combo outputs.'''
    
 cutoff = pd.to_datetime("2022-06-30")
 
@@ -881,6 +928,11 @@ for country in inf_data.columns:
     
 #%%  Evaluate with EPU from 1997-01 to 2024-10
 ''' GDP EPU'''
+
+'''Process and forecast GDP with Policy Uncertainty: align GDP and EPU series to 1997–2024, 
+apply log-difference to GDP, auto-select ARIMA orders, invoke the quarterly–monthly EPU forecasting routine per country, 
+and gather RMSE summaries and output results.'''
+
 # 1) Trim GDP to 1997-01-01…2024-10-01
 gdp_data_tmp = gdp_data.loc["1997-01-01":"2024-07-01"]
 
@@ -952,6 +1004,11 @@ for country, code in country_map.items():
     
 #%%
 '''    Inf EPU'''
+
+'''Filter and align monthly inflation and EPU data to the target period, auto-select ARIMA orders, 
+invoke the monthly–monthly EPU forecasting routine for each country, 
+and store RMSE summaries along with raw and combined outputs'''
+
 # 1) Cutoff
 cutoff = pd.to_datetime("2024-12-01")
 inf_data = df_inf[df_inf.index < cutoff]
@@ -1026,6 +1083,11 @@ for country, code in country_map.items():
 
 #%%
 ''' GDP Ashwin'''
+
+'''GDP forecasting with Ashwin sentiment lexica: filter daily and quarterly Ashwin sentiment to the target sample period, 
+trim and transform the country GDP series, auto-select ARIMA orders, 
+then loop through each sentiment lexicon separately to run quarterly–daily forecasts and store RMSE summaries and outputs'''
+
 # 4) Filter to your common sentiment sample 2002-01-02 → 2020-10-01
 sent_start = pd.to_datetime("2002-01-02")
 sent_end   = pd.to_datetime("2020-01-01")
@@ -1110,6 +1172,10 @@ for country in gdp_data.columns:
 #%%
 
 ''' Inf Ashwin'''
+
+'''Forecast Inflation with Ashwin Sentiments: trim inflation data and monthly/daily Ashwin sentiment to the analysis window, 
+auto-select ARIMA orders, then loop through each lexicon to perform monthly–daily sentiment‐augmented forecasts and collect RMSE summaries and output data'''
+
 # 4) Filter to your common sentiment sample 2002-01-02 → 2020-10-01
 sent_start = pd.to_datetime("2002-01-02")
 sent_end   = pd.to_datetime("2020-01-01")
@@ -1192,6 +1258,10 @@ for country in inf_data.columns:
 #%%
 ''' Pre covid    GDP FIGAS'''
 
+'''Pre-COVID GDP with FIGAS forecasts: log-difference transform each country’s GDP before 2020, 
+auto-select ARIMA orders, choose top-2 sentiment drivers, run quarterly–daily mixed-frequency forecasting, 
+and collect RMSE summaries and model outputs.'''
+
 # --- GDP Figas: mixed-frequency models on pre-COVID data ---
 all_summary_rmse_gdp_figas_pre_covid = {}
 all_raw_outputs_gdp_figas_pre_covid   = {}
@@ -1265,6 +1335,11 @@ for country in gdp_data.columns:
 #%%    
 '''  Inf Figas'''
 
+'''Pre-COVID FIGAS Inflation Forecasting: for each country, truncate inflation and sentiment data before 2020, 
+adjust Italy’s series if needed, auto-select ARIMA orders on the inflation series, 
+pick the top-2 monthly/daily sentiment drivers, run the mixed-frequency monthly–daily FIGAS forecasting routine, 
+and collect RMSE summaries plus raw and combined outputs'''
+
 # --- Inf Figas: monthly/daily models on pre-COVID data ---
 all_summary_rmse_inf_figas_pre_covid = {}
 all_raw_outputs_inf_figas_pre_covid   = {}
@@ -1335,6 +1410,10 @@ for country in inf_data_pre_covid.columns:
 #%%
 '''GDP EPU'''
 
+'''Pre-COVID GDP with EPU mixed-frequency forecasting: trim GDP and EPU series to before 2020, 
+log-difference the GDP, prepare country-specific EPU inputs, auto-select ARIMA orders, 
+run the quarterly–monthly EPU forecasting routine, and collect RMSE summaries and model outputs'''
+
 # --- GDP EPU: quarterly–monthly models on pre-COVID data ---
 all_summary_rmse_gdp_epu_pre_covid = {}
 all_raw_outputs_gdp_epu_pre_covid   = {}
@@ -1403,6 +1482,9 @@ for country, code in country_map.items():
 #%%
 '''Inf EPU'''
 
+'''Pre-COVID Inflation with EPU: filter inflation and EPU series to before 2020, align and timestamp monthly data, 
+auto-select ARIMA orders, run the monthly–monthly mixed-frequency EPU forecasting routine for each country, 
+and store RMSE summaries plus raw and combo outputs'''
 
 # --- Inf EPU: quarterly–monthly models on pre-COVID data ---
 all_summary_rmse_inf_epu_pre_covid = {}
@@ -1478,6 +1560,10 @@ for country, code in country_map.items():
     all_combo_outputs_inf_epu_pre_covid[country] = results_pre["combo_outputs"]
 
 #%%
+'''Generate pre-COVID rolling RMSE heatmap grids for each country—comparing inflation (left) and GDP (right) across EPU, 
+FIGAS, and selected Ashwin sentiment models—by collecting per-model errors, aligning time windows, 
+drawing multi-row panels, centering labels, formatting years, and adding shared colorbars for clear side-by-side comparison.'''
+
 # 1) Per-country RMSE min/max for GDP and Inflation
 def collect_country_rmse_vals(datasets, country, window=4):
     all_vals = []
@@ -1617,7 +1703,13 @@ for country in countries:
         bottom=0.03
     )
     plt.show()
+    
+    
 #%%
+'''Batchly generate 2017–2024 rolling RMSE heatmaps for GDP and inflation 
+(using both EPU and FIGAS forecasts) across Germany, France, Spain, and Italy 
+by looping through each country and calling the unified plotting function.'''
+
 for country in ['Germany', 'France', 'Spain', 'Italy']:
     plot_country_rolling_rmse(
         country=country,
@@ -1647,6 +1739,9 @@ for country in ['Germany', 'France', 'Spain', 'Italy']:
 #     ) 
     
 #%%
+'''Loop through each country to visualize and compare actual vs. predicted GDP and inflation time series,
+separately for pre- and post-COVID periods—across EPU, FIGAS, and Ashwin sentiment models by invoking the grouped-model plotting routine.'''
+
 for country in ["Germany", "France", "Spain", "Italy"]:
     plot_forecasts_grouped_by_model(
         country=country,
@@ -1671,6 +1766,11 @@ for country in ["Germany", "France", "Spain", "Italy"]:
     )
   
 #%%
+'''Compile and export RMSE summary tables to LaTeX: for each country, 
+build and write out absolute‐value single-model and combination-model RMSE tables for both pre- and post-COVID periods, 
+followed by Ashwin sentiment–based GDP and inflation RMSE tables (single and combo), 
+properly labeled and formatted in the specified .tex file.'''
+
 
 countries    = ["Germany","France","Spain","Italy"]
 model_order  = ["ARIMA","ARIMAX","U-MIDAS","LASSO","RF","MIDAS-Net","r-MIDAS"]
@@ -1996,7 +2096,9 @@ print(f"All tables written to {output_path}")
 
   
 #%%
-
+'''Persist all forecast results and evaluation metrics: gather summary RMSEs, raw outputs, and combined outputs 
+for both pre- and post-COVID models across GDP, inflation, EPU, FIGAS, and Ashwin sentiments, 
+then save them as a single Joblib file in the specified directory.'''
 
 
 def save_model_outputs(output_dir=r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Tables", filename="model_outputs_H_12.joblib"):
@@ -2055,6 +2157,8 @@ def save_model_outputs(output_dir=r"C:\Users\oskar\Desktop\Uni\4. Mastersemester
     
 save_model_outputs()
 #%%
+'''Load and restore saved model outputs: read the Joblib file containing all forecast results and metrics, 
+inject each variable into the current namespace, and confirm successful loading.'''
 
 loaded_data = joblib.load(r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master Thesis\Tables\model_outputs.joblib")
 

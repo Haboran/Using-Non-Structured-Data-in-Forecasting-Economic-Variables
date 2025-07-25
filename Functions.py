@@ -261,58 +261,68 @@ def scatter_actual_vs_pred(model_outputs, title_prefix='Actual vs Predicted'):
 def rolling_rmse_heatmap(model_outputs, window=4,
                          start='2017-01-01', end='2024-12-31',
                          title='Rolling RMSE Heatmap'):
+    """
+    Generate a heatmap of rolling RMSE values for multiple models over time.
 
-    # --- compute rolling-RMSE series (unchanged) ---
+    model_outputs : dict
+        Mapping from model name to a tuple of (actuals, predictions, dates).
+    window : int
+        Number of periods to include in each rolling RMSE calculation.
+    start, end : str or datetime-like
+        Time span for the heatmap’s horizontal axis.
+    title : str
+        Title for the resulting plot.
+    """
+
+    # 1) Calculate a time series of rolling RMSE for each model
     rmse_dict = {}
-    for name, (acts, preds, dates) in model_outputs.items():
-        acts = np.array(acts)
-        preds = np.array(preds)
-        idx = pd.to_datetime(dates[-len(acts):])
-        errs = acts - preds
+    for name, (actuals, preds, dates) in model_outputs.items():
+        # compute per-period error, then rolling-window RMSE
+        errs = np.array(actuals) - np.array(preds)
+        idx  = pd.to_datetime(dates[-len(errs):])
         rmse = (pd.Series(errs**2, index=idx)
                    .rolling(window=window, min_periods=1)
-                   .mean()**0.5)
+                   .mean()
+                   .pow(0.5))
         rmse_dict[name] = rmse
 
-    # --- define a common full index 2017–2024 at input frequency ---
-    # infer the original freq (quarterly or monthly)
-    sample = next(iter(rmse_dict.values()))
-    freq  = pd.infer_freq(sample.index) or 'M'
-    full_dates = pd.date_range(start, end, freq=freq)
+    # 2) Create a unified date index covering all models
+    #    at the appropriate frequency (monthly/quarterly)
+    sample_series = next(iter(rmse_dict.values()))
+    freq          = pd.infer_freq(sample_series.index) or 'M'
+    full_dates    = pd.date_range(start, end, freq=freq)
 
-    # --- reindex each series onto the common grid and build DataFrame ---
-    df = pd.DataFrame({m: s.reindex(full_dates) for m, s in rmse_dict.items()})
-    df = df.T  # rows=models, cols=dates
+    # 3) Align each model’s RMSE onto this common grid and
+    #    assemble into a 2D DataFrame (rows=models, cols=dates)
+    df = pd.DataFrame({
+        name: series.reindex(full_dates)
+        for name, series in rmse_dict.items()
+    }).T
 
-    # --- mask NaNs so they appear white ---
+    # 4) Prepare the data array and colormap,
+    #    masking missing values so they render as white
     data = np.ma.masked_invalid(df.values)
     cmap = plt.get_cmap('viridis', 256)
-    cmap.set_bad(color='white')  # masked→white
+    cmap.set_bad(color='white')
 
-    # --- plot with a true date axis ---
-    fig, ax = plt.subplots(figsize=(12, len(df)*0.5 + 1))
-    # convert dates to matplotlib floats
-    mdates_vals = mdates.date2num(full_dates.to_pydatetime())
-    extent = [mdates_vals[0], mdates_vals[-1], 0, len(df)]
-    im = ax.imshow(
-        data,
-        aspect='auto',
-        interpolation='nearest',
-        cmap=cmap,
-        extent=extent,
-        origin='lower',
-    )
+    # 5) Render the heatmap with a true date-based x-axis
+    fig, ax = plt.subplots(figsize=(12, len(df) * 0.5 + 1))
+    x_nums = mdates.date2num(full_dates.to_pydatetime())
+    extent = [x_nums[0], x_nums[-1], 0, len(df)]
+    im     = ax.imshow(data, aspect='auto', interpolation='nearest',
+                       cmap=cmap, extent=extent, origin='lower')
 
-    # y-axis labels
+    # label models on the y-axis
     ax.set_yticks(np.arange(len(df.index)))
     ax.set_yticklabels(df.index)
 
-    # x-axis: only years
+    # show only year labels on the x-axis
     ax.xaxis_date()
-    ax.xaxis.set_major_locator(mdates.YearLocator())      # every Jan.1st
+    ax.xaxis.set_major_locator(mdates.YearLocator())
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-    ax.set_xlim([mdates_vals[0], mdates.date2num(pd.Timestamp(end))])
+    ax.set_xlim(extent[:2])
 
+    # finalize the plot
     ax.set_title(title)
     fig.colorbar(im, ax=ax, label='RMSE')
     plt.tight_layout()
@@ -322,57 +332,79 @@ def rolling_rmse_heatmap(model_outputs, window=4,
     #%%
 def heatmap_on_ax(ax, model_outputs, window=4, start='2017-01-01', end='2024-12-31',
                   title='', vmin=None, vmax=None, cmap=None):
-    import numpy as np
-    import pandas as pd
-    import matplotlib.dates as mdates
+    """
+    Draws a colored grid showing how prediction errors evolve over time for multiple models.
+    Each row is one model; each column is a time period, colored by rolling RMSE.
 
-    # 1) compute rolling RMSE series for each model
+    Parameters:
+      ax            - Matplotlib axis to draw on.
+      model_outputs - Dict mapping model names to (actuals, predictions, dates).
+      window        - Number of periods for computing moving RMSE.
+      start, end    - Date range of the heatmap.
+      title         - Text to show above the plot.
+      vmin, vmax    - Min and max colorscale limits.
+      cmap          - Color map to use; defaults to 'viridis'.
+
+    Returns:
+      The image object created, so a colorbar can be added if needed.
+    """
+
+    # 1) For each model, calculate a time series of rolling RMSE values.
     rmse_dict = {}
     for name, (acts, preds, dates) in model_outputs.items():
+        # Turn lists of true and predicted values into arrays
         a = np.array(acts)
         p = np.array(preds)
 
+        # Make sure both series have the same length to compare
         n = min(len(a), len(p))
         if n == 0:
+            # Skip models with no data
             continue
         a = a[-n:]
         p = p[-n:]
+        # Convert the last n dates into a datetime index
         idx = pd.to_datetime(dates[-n:])
 
+        # Compute errors, square them, average over the window, then sqrt -> RMSE
         errs = a - p
         rmse = (
             pd.Series(errs**2, index=idx)
               .rolling(window=window, min_periods=1)
               .mean()**0.5
         )
+        # Keep the result for this model
         rmse_dict[name] = rmse
 
-    # 2) align to common date grid
+    # 2) Stop if no model had data
     if not rmse_dict:
         return None
+    # Pick one series to infer how often to place columns (e.g., daily, monthly)
     sample = next(iter(rmse_dict.values()))
     freq = pd.infer_freq(sample.index) or 'M'
+    # Build a full calendar index from start to end at that frequency
     full_dates = pd.date_range(start, end, freq=freq)
+    # Re-align every model's RMSE series onto the full grid, so they all share the same columns
     df = pd.DataFrame({m: s.reindex(full_dates) for m, s in rmse_dict.items()}).T
-    # df = df.iloc[::-1]  # reverse row order
 
-    # 3) build masked array and plot
-    
+    # 3) Turn missing values into masked entries and choose a color map
     data = np.ma.masked_invalid(df.values)
     if cmap is None:
         cmap = plt.get_cmap('viridis', 256)
+    # Show gaps as white
     cmap.set_bad(color='white')
 
-    
+    # Convert dates to numbers so imshow can position them correctly
     mvals = mdates.date2num(full_dates.to_pydatetime())
     extent = [mvals[0], mvals[-1], 0, len(df)]
+    # Draw the 2D colored grid: models on y-axis, time on x-axis
     im = ax.imshow(
         data, aspect='auto', interpolation='nearest',
         cmap=cmap, extent=extent, origin='upper',
         vmin=vmin, vmax=vmax
     )
 
-    # 4) labels & formatting
+    # 4) Label the axes: model names on left, years at bottom, and add title
     ax.set_yticks(np.arange(len(df.index)))
     ax.set_yticklabels(df.index, fontsize=8)
     ax.set_title(title, fontsize=10)
@@ -382,17 +414,33 @@ def heatmap_on_ax(ax, model_outputs, window=4, start='2017-01-01', end='2024-12-
     ax.set_xlim(extent[0], extent[1])
     return im
 
+
 def compute_rmse_range(*datasets, window=4):
-    """Helper to compute global RMSE range across all provided datasets."""
+    """
+    Finds the smallest and largest rolling RMSE you get across several model outputs.
+    Useful for setting a common color scale when plotting multiple heatmaps.
+
+    Parameters:
+      *datasets - Any number of dicts like those passed to heatmap_on_ax.
+      window    - The window size over which to smooth the RMSE.
+
+    Returns:
+      A pair (min_rmse, max_rmse).
+    """
     all_vals = []
+    # Go through every provided dataset
     for data in datasets:
         for _, (acts, preds, _) in data.items():
+            # Convert to arrays and align lengths
             a, p = np.array(acts), np.array(preds)
             n = min(len(a), len(p))
             if n == 0:
                 continue
+            # Calculate rolling RMSE values
             rmse = pd.Series((a[-n:] - p[-n:])**2).rolling(window, min_periods=1).mean()**0.5
+            # Collect all numbers, including NaNs
             all_vals.extend(rmse.values)
+    # Return the lowest and highest RMSE seen (ignoring missing data)
     return np.nanmin(all_vals), np.nanmax(all_vals)
 
 
@@ -400,61 +448,83 @@ def plot_country_rolling_rmse(country,
                               gdp_epu, gdp_figas,
                               inf_epu, inf_figas,
                               window=4, start='2017-01-01', end='2024-12-31'):
+    """
+    Creates a 2×2 panel of heatmaps showing how forecasting errors changed over time
+    for a given country, covering both inflation and GDP predictions from two different sources.
 
-    # 1) Compute separate RMSE ranges
+    Parameters:
+      country    - Name of the country (used for plot titles, if needed).
+      gdp_epu    - Dict of EPU-based GDP model outputs: {model_name: (actuals, preds, dates)}.
+      gdp_figas  - Dict of FIGAS-based GDP model outputs.
+      inf_epu    - Dict of EPU-based inflation model outputs.
+      inf_figas  - Dict of FIGAS-based inflation model outputs.
+      window     - Rolling window size for smoothing RMSE (default 4 periods).
+      start, end - Date range for the x-axis of all heatmaps.
+
+    This function arranges four heatmaps:
+      • Top row: RMSE heatmaps for EPU-based models (left: inflation, right: GDP).
+      • Bottom row: RMSE heatmaps for FIGAS-based models (left: inflation, right: GDP).
+    Each colored grid cell shows the rolling RMSE at that time for one model.
+    """
+
+    # 1) Find the min and max RMSE values across each pair of datasets
+    #    These ranges let us use the same color scale for inflation vs. GDP plots.
     vmin_inf, vmax_inf = compute_rmse_range(inf_epu, inf_figas, window=window)
     vmin_gdp, vmax_gdp = compute_rmse_range(gdp_epu, gdp_figas, window=window)
 
-    # 2) Define colormap
+    # 2) Build a custom blue-to-red color map for showing error severity
     custom_cmap = LinearSegmentedColormap.from_list(
-        'custom_heat', ['darkblue','blue','cyan','yellow','orange','red','darkred']
+        'custom_heat', ['darkblue', 'blue', 'cyan', 'yellow', 'orange', 'red', 'darkred']
     )
 
-    # 3) Make a 2×2 grid
+    # 3) Create a 2×2 grid of subplots, sharing the x-axis formatting
     fig, axes = plt.subplots(2, 2, figsize=(14, 8), sharex='col')
 
-    # 4) Draw heatmaps (left = Inflation, right = GDP)
-    im_inf1 = heatmap_on_ax(axes[0, 0], inf_epu,    window, start, end,
-                            title="EPU Inflation",
-                            vmin=vmin_inf, vmax=vmax_inf,
-                            cmap=custom_cmap)
-    im_gdp1 = heatmap_on_ax(axes[0, 1], gdp_epu,    window, start, end,
-                            title="EPU GDP",
-                            vmin=vmin_gdp, vmax=vmax_gdp,
-                            cmap=custom_cmap)
+    # 4) Fill each subplot with a heatmap of rolling RMSE
+    #    Left column: inflation models; Right column: GDP models.
+    im_inf1 = heatmap_on_ax(
+        axes[0, 0], inf_epu,    window, start, end,
+        title="EPU Inflation", vmin=vmin_inf, vmax=vmax_inf,
+        cmap=custom_cmap
+    )
+    im_gdp1 = heatmap_on_ax(
+        axes[0, 1], gdp_epu,    window, start, end,
+        title="EPU GDP", vmin=vmin_gdp, vmax=vmax_gdp,
+        cmap=custom_cmap
+    )
+    im_inf2 = heatmap_on_ax(
+        axes[1, 0], inf_figas, window, start, end,
+        title="FIGAS Inflation", vmin=vmin_inf, vmax=vmax_inf,
+        cmap=custom_cmap
+    )
+    im_gdp2 = heatmap_on_ax(
+        axes[1, 1], gdp_figas, window, start, end,
+        title="FIGAS GDP", vmin=vmin_gdp, vmax=vmax_gdp,
+        cmap=custom_cmap
+    )
 
-    im_inf2 = heatmap_on_ax(axes[1, 0], inf_figas, window, start, end,
-                            title="FIGAS Inflation",
-                            vmin=vmin_inf, vmax=vmax_inf,
-                            cmap=custom_cmap)
-    im_gdp2 = heatmap_on_ax(axes[1, 1], gdp_figas, window, start, end,
-                            title="FIGAS GDP",
-                            vmin=vmin_gdp, vmax=vmax_gdp,
-                            cmap=custom_cmap)
-
-    # ── CENTER THE Y-LABELS IN EACH ROW ──
+    # 5) Center the model names on the y-axis of each heatmap
+    #    Reverse labels so the first row appears at the top
     heatmap_axes = [
-        (axes[0, 0], inf_epu),
-        (axes[0, 1], gdp_epu),
-        (axes[1, 0], inf_figas),
-        (axes[1, 1], gdp_figas),
+        (axes[0, 0], inf_epu), (axes[0, 1], gdp_epu),
+        (axes[1, 0], inf_figas), (axes[1, 1], gdp_figas),
     ]
     for ax, data_dict in heatmap_axes:
         labels = list(data_dict.keys())[::-1]
         n_rows = len(labels)
+        # Position labels at the middle of each row and keep them horizontal
         ax.set_yticks(np.arange(n_rows) + 0.5)
         ax.set_yticklabels(labels, va='center', rotation=0)
         
-        
-    # 5) Format x-axis
+    # 6) Format the x-axis on all plots: show years, rotate labels diagonally
     for ax in axes.flatten():
         ax.xaxis.set_major_locator(mdates.YearLocator())
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
         ax.tick_params(axis='x', labelrotation=45, labelsize=8)
         ax.set_xlabel("Year")
 
-    # 6) Add two separate colorbars
-    cax_inf = fig.add_axes([0.45, 0.15, 0.02, 0.7])
+    # 7) Add two separate colorbars for inflation (left) and GDP (right)
+    cax_inf = fig.add_axes([0.45, 0.15, 0.02, 0.7])  # placement [left, bottom, width, height]
     cb_inf = fig.colorbar(im_inf1, cax=cax_inf)
     cb_inf.set_label("RMSE (Inflation)", rotation=270, labelpad=15)
 
@@ -462,16 +532,13 @@ def plot_country_rolling_rmse(country,
     cb_gdp = fig.colorbar(im_gdp1, cax=cax_gdp)
     cb_gdp.set_label("RMSE (GDP)", rotation=270, labelpad=15)
 
-    # 7) Title + layout adjust
-    #fig.suptitle(f"Rolling RMSE Heatmaps for {country}", fontsize=14)
+    # 8) Adjust overall layout to make space for titles and labels
     fig.subplots_adjust(
-        left=0.05,
-        right=0.97,
-        wspace=0.4,
-        top=0.96,
-        bottom=0.03
+        left=0.05, right=0.97, wspace=0.4,
+        top=0.96, bottom=0.03
     )
 
+    # Finally, display everything on screen
     plt.show()
     
     
@@ -487,39 +554,91 @@ def plot_forecasts_grouped_by_model(
     ashwin_dict_inf,
     ashwin_sentiments=["vader", "stability", "econlex", "loughran"]
 ):
+    """
+    Plots time-series of actual vs. predicted values for each forecasting model,
+    grouped by data source and period (pre- vs. post-COVID) for a given country.
+
+    For each combination of period (Pre-COVID/Post-COVID) and variable (GDP/Inflation),
+    this creates one figure per model, stacking lines from different data sources:
+      • EPU-based forecasts
+      • FIGAS-based forecasts
+      • Various sentiment-based forecasts (e.g., VADER, Stability, EconLex, Loughran)
+
+    Parameters:
+      country         - The country name to filter data from the provided dicts.
+      gdp_pre_dicts   - Dicts of GDP forecasts before COVID, keyed by 'epu' and 'figas'.
+      inf_pre_dicts   - Dicts of inflation forecasts before COVID.
+      gdp_post_dicts  - Dicts of GDP forecasts after COVID.
+      inf_post_dicts  - Dicts of inflation forecasts after COVID.
+      ashwin_dict_gdp - Nested dict of sentiment-based GDP forecasts: country → sentiment → model data.
+      ashwin_dict_inf - Same as above for inflation.
+      ashwin_sentiments - List of sentiment source names to include (defaults provided).
+
+    Each model’s plot shows:
+      - Black line: actual historical values
+      - Blue line: model’s predicted values
+      - Year ticks on the x-axis
+      - Grid and legend for clarity
+    """
+
+    # Inner helper: make one plot for a single model across all data sources
     def plot_model_group(title_prefix, data_sources, var_type):
-        fig, axes = plt.subplots(len(data_sources), 1, figsize=(12, len(data_sources) * 2.5), sharex=True)
+        # Create a vertical stack of subplots: one row per data source
+        fig, axes = plt.subplots(
+            len(data_sources), 1,
+            figsize=(12, len(data_sources) * 2.5),
+            sharex=True
+        )
+        # Ensure axes is iterable when only one subplot
         if len(data_sources) == 1:
             axes = [axes]
 
+        # Loop through each data source (e.g. 'EPU', 'FIGAS', 'VADER', etc.)
         for ax, (src, model_data) in zip(axes, data_sources.items()):
+            # Skip if this model name is not present in the source’s data
             if model_name not in model_data:
                 continue
             acts, preds, dates = model_data[model_name]
+            # Skip if missing any series
             if len(acts) == 0 or len(preds) == 0 or len(dates) == 0:
                 continue
+            # Align the dates to the length of the actual series
             acts = np.array(acts)
             preds = np.array(preds)
             dates = pd.to_datetime(dates[-len(acts):])
+
+            # Draw the actual values in black and predictions in blue
             ax.plot(dates, acts, color='black', linewidth=1.5, label='Actual')
-            ax.plot(dates, preds, linestyle='-', color='tab:blue', label='Prediction')
+            ax.plot(
+                dates, preds,
+                linestyle='-', color='tab:blue',
+                label='Prediction'
+            )
+            # Title each subplot by data source and model name
             ax.set_title(f"{src} – {model_name}", fontsize=10)
             ax.grid(True)
             ax.legend(fontsize=7)
 
+        # Label the shared x-axis on the bottom plot
         axes[-1].set_xlabel("Date")
+        # Format years and rotate labels for readability
         for ax in axes:
             ax.xaxis.set_major_locator(mdates.YearLocator())
             ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
             ax.tick_params(axis='x', rotation=45)
 
-        fig.suptitle(f"{country} – {title_prefix} {var_type} – {model_name}", fontsize=14)
+        # Add an overall title and tighten layout
+        fig.suptitle(
+            f"{country} – {title_prefix} {var_type} – {model_name}",
+            fontsize=14
+        )
         plt.tight_layout(rect=[0, 0, 1, 0.95])
         plt.show()
 
+    # Build a list of all sources to include: EPU, FIGAS, plus each sentiment in uppercase
     sources = ['EPU', 'FIGAS'] + [s.upper() for s in ashwin_sentiments]
 
-    # 1. Pre-COVID GDP
+    # 1) Pre-COVID GDP: gather data from each source into one dict
     gdp_pre_data = {}
     for src in sources:
         if src == 'EPU':
@@ -527,13 +646,19 @@ def plot_forecasts_grouped_by_model(
         elif src == 'FIGAS':
             gdp_pre_data[src] = gdp_pre_dicts['figas'].get(country, {})
         else:
-            gdp_pre_data[src] = ashwin_dict_gdp.get(country, {}).get(src.lower(), {})
-
+            # sentiment sources live under ashwin_dict_gdp[country][sentiment]
+            gdp_pre_data[src] = (
+                ashwin_dict_gdp
+                .get(country, {})
+                .get(src.lower(), {})
+            )
+    # Find every model name across all sources
     all_models = sorted(set().union(*(d.keys() for d in gdp_pre_data.values())))
+    # Make one combined plot per model
     for model_name in all_models:
         plot_model_group("Pre-COVID", gdp_pre_data, "GDP")
 
-    # 2. Pre-COVID Inflation
+    # 2) Pre-COVID Inflation: same process but using inflation dicts
     inf_pre_data = {}
     for src in sources:
         if src == 'EPU':
@@ -541,13 +666,16 @@ def plot_forecasts_grouped_by_model(
         elif src == 'FIGAS':
             inf_pre_data[src] = inf_pre_dicts['figas'].get(country, {})
         else:
-            inf_pre_data[src] = ashwin_dict_inf.get(country, {}).get(src.lower(), {})
-
+            inf_pre_data[src] = (
+                ashwin_dict_inf
+                .get(country, {})
+                .get(src.lower(), {})
+            )
     all_models = sorted(set().union(*(d.keys() for d in inf_pre_data.values())))
     for model_name in all_models:
         plot_model_group("Pre-COVID", inf_pre_data, "Inflation")
 
-    # 3. Post-COVID GDP
+    # 3) Post-COVID GDP: only EPU and FIGAS available here
     gdp_post_data = {
         'EPU': gdp_post_dicts['epu'].get(country, {}),
         'FIGAS': gdp_post_dicts['figas'].get(country, {})
@@ -556,7 +684,7 @@ def plot_forecasts_grouped_by_model(
     for model_name in all_models:
         plot_model_group("Post-COVID", gdp_post_data, "GDP")
 
-    # 4. Post-COVID Inflation
+    # 4) Post-COVID Inflation: same as GDP but for inflation
     inf_post_data = {
         'EPU': inf_post_dicts['epu'].get(country, {}),
         'FIGAS': inf_post_dicts['figas'].get(country, {})
