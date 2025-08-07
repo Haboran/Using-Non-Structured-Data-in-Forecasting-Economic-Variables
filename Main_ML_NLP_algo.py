@@ -435,6 +435,302 @@ plt.grid(True)
 plt.show()
 
 
+#%%
+# from sklearn.preprocessing import StandardScaler
+# from sklearn.decomposition import PCA
+# from sklearn.linear_model import LinearRegression
+
+# country_map = {"Germany":"DE","France":"FR","Spain":"ES","Italy":"IT"}
+# # Make sure gdp_data is timestamped at quarter-end:
+# gdp_qe = gdp_data.copy()
+# gdp_qe.index = gdp_qe.index.to_period('Q').to_timestamp() + QuarterEnd(0)
+# log_gdp_data = transform_series(gdp_qe, method='log_diff')
+# for country, code in country_map.items():
+#     for topic in sentiment_cols:
+#         old = f"{country}_{topic}"
+#         new = f"{code}_{topic}"
+#         if old in quarterly_sentiment.columns:
+#             rename_map[old] = new
+# quarterly_sentiment.rename(columns=rename_map, inplace=True)
+
+# # 0b) Rename GDP columns in log_gdp_data from full country → ISO code
+# log_gdp_data.rename(columns=country_map, inplace=True)
+# # 0) Make sure quarterly_sentiment has a proper datetime index
+# quarterly_sentiment['date'] = pd.to_datetime(quarterly_sentiment['date'])
+# quarterly_sentiment.set_index('date', inplace=True)
+
+# # 1) Loop over each country
+# for country, code in country_map.items():
+#     # a) pull all FIGAS columns for that country by full-name prefix
+#     figas_q = quarterly_sentiment.filter(like=f"{code}_").copy()
+#     if figas_q.empty:
+#         print(f"{country} ({code}): no FIGAS topics found – skipping")
+#         continue
+#     figas_q.dropna(how='all', inplace=True)
+
+#     # c) standardize & extract PC1
+#     scaler = StandardScaler()
+#     X = scaler.fit_transform(figas_q.values)
+#     pca = PCA(n_components=1)
+#     pc1 = pca.fit_transform(X).flatten()
+#     pc1_s = pd.Series(pc1, index=figas_q.index, name='PC1')
+
+#     # d) grab quarterly GDP *and* convert monthly inflation → quarter-end
+#     y_gdp = log_gdp_data[code]                 # already log-diff, quarter-end aligned
+#     y_inf = df_inf[country].resample('Q').last()  # take last month of each quarter
+
+#     # e) merge, drop gaps
+#     df_pc = pd.concat([pc1_s, y_gdp.rename('GDP'), y_inf.rename('Inflation')], axis=1).dropna()
+#     if df_pc.shape[0] < 2:
+#         print(f"{country} ({code}): too few obs ({df_pc.shape[0]}) – skipping")
+#         continue
+
+#     # f) regress PC1 → target, grab R²
+#     lm = LinearRegression()
+#     lm.fit(df_pc[['PC1']], df_pc['GDP'])
+#     r2_gdp = lm.score(df_pc[['PC1']], df_pc['GDP'])
+#     lm.fit(df_pc[['PC1']], df_pc['Inflation'])
+#     r2_inf = lm.score(df_pc[['PC1']], df_pc['Inflation'])
+
+#     # g) bar-plot
+#     plt.figure(figsize=(6,4))
+#     bars = plt.bar(['GDP','Inflation'], [r2_gdp, r2_inf], edgecolor='k')
+#     plt.ylim(0,1)
+#     plt.ylabel('$R^2$ (explained variation)')
+#     plt.title(f'{country} ({code}) – FIGAS PC1 → Variance Explained')
+#     for bar, val in zip(bars, [r2_gdp, r2_inf]):
+#         plt.text(bar.get_x()+bar.get_width()/2,
+#                  bar.get_height()+0.02,
+#                  f"{val:.2f}",
+#                  ha='center')
+#     plt.tight_layout()
+#     plt.show()
+
+#%%
+# # 1) Transform GDP to log-diff
+# log_gdp_data = transform_series(gdp_data, method='log_diff')
+
+# # — Quarterly → quarter‐end align —
+# for df in (quarterly_sentiment, epu_quarterly, ashwin_quarterly_country_sentiment_df):
+#     # make sure 'date' is parsed and then snap via .dt
+#     df['date'] = (
+#         pd.to_datetime(df['date'])
+#           .dt.to_period('Q')
+#           .dt.to_timestamp(how='end')
+#     )
+#     df.set_index('date', inplace=True)
+
+# # make sure your GDP index is datetime first
+# if not isinstance(log_gdp_data.index, pd.DatetimeIndex):
+#     # if you have a 'date' column, use that; otherwise parse the index
+#     try:
+#         log_gdp_data = log_gdp_data.set_index('date')
+#     except KeyError:
+#         log_gdp_data.index = pd.to_datetime(log_gdp_data.index)
+# # now snap the index to quarter‐ends
+# log_gdp_data.index = (
+#     log_gdp_data.index
+#       .to_period('Q')
+#       .to_timestamp(how='end')
+# )
+
+# # — Monthly → month‐end align —
+# for df in (monthly_sentiment, ashwin_monthly_country_sentiment_df):
+#     if 'date' in df.columns:
+#         df['date'] = (
+#             pd.to_datetime(df['date'])
+#               .dt.to_period('M')
+#               .dt.to_timestamp(how='end')
+#         )
+#         df.set_index('date', inplace=True)
+#     else:
+#         # index must already be datetime
+#         df.index = pd.to_datetime(df.index)
+#         df.index = df.index.to_period('M').to_timestamp(how='end')
+
+# # inflation series
+# df_inf.index = (
+#     pd.to_datetime(df_inf.index)
+#       .to_period('M')
+#       .to_timestamp(how='end')
+# )
+
+# # —— MISSING: align epu_monthly to month‐ends too ——
+# if 'date' in epu_monthly.columns:
+#     epu_monthly['date'] = (
+#         pd.to_datetime(epu_monthly['date'])
+#           .dt.to_period('M')
+#           .dt.to_timestamp(how='end')
+#     )
+#     epu_monthly.set_index('date', inplace=True)
+# else:
+#     epu_monthly.index = (
+#         pd.to_datetime(epu_monthly.index)
+#           .to_period('M')
+#           .to_timestamp(how='end')
+#     )
+
+
+# country_map = {"Germany":"DE","France":"FR","Spain":"ES","Italy":"IT"}
+
+# def bootstrap_corr_df(df, n_boot=1000, seed=42):
+#     df = df.dropna(subset=df.columns)
+#     topics = [c for c in df.columns if c != 'target']
+#     if not topics:
+#         return pd.DataFrame()
+#     # point‐estimate or NaN
+#     corr0 = df.corr().loc['target', topics] if len(df)>=1 else pd.Series({c:np.nan for c in topics})
+#     if len(df) < 2:
+#         return pd.DataFrame({c: np.full(n_boot, corr0[c]) for c in topics})
+#     rng = np.random.default_rng(seed)
+#     n = len(df)
+#     results = {c: np.zeros(n_boot) for c in topics}
+#     for i in range(n_boot):
+#         samp = df.iloc[rng.integers(0, n, n)]
+
+#         for c in topics:
+#             # 1) coerce to floats (NaN on errors)
+#             x = pd.to_numeric(samp[c], errors='coerce').to_numpy(dtype=float)
+#             y = pd.to_numeric(samp['target'], errors='coerce').to_numpy(dtype=float)
+
+#             # 2) now we can safely use np.isnan
+#             mask = ~np.isnan(x) & ~np.isnan(y)
+#             if mask.sum() > 1:
+#                 x2, y2 = x[mask], y[mask]
+#                 xm, ym = x2.mean(), y2.mean()
+#                 num = ((x2 - xm) * (y2 - ym)).sum()
+#                 den = np.sqrt(((x2 - xm)**2).sum() * ((y2 - ym)**2).sum())
+#                 results[c][i] = num/den if den != 0 else np.nan
+#             else:
+#                 results[c][i] = np.nan
+
+#     return pd.DataFrame(results)
+
+# def run_corr_latex_and_box(df, code, caption):
+#     """
+#     df: DataFrame with one or more sentiment columns and a 'target' column.
+#     code: either a prefix like 'DE' (matches 'DE_topic') or the full column name 'EPU'.
+#     """
+#     # 1) detect columns
+#     cols = [c for c in df.columns if c.startswith(code + "_")]
+#     # fallback: maybe it's a single-series like EPU
+#     if not cols and code in df.columns:
+#         cols = [code]
+
+#     df = df[cols + ['target']].dropna()
+#     n = len(df)
+
+#     # 2) handle too-few-rows
+#     if n == 0:
+#         print(f"{caption} ({code}): no overlapping datapoints — skipped\n")
+#         return
+#     if n == 1:
+#         r = df[cols[0]].corr(df['target'])
+#         single = pd.Series({cols[0]: r}).to_frame(caption)
+#         print(single.to_latex(
+#             float_format="%.3f",
+#             caption=f"{caption} ({code}), 1 obs",
+#             label=f"tab:{code}_{caption.replace(' ','_')}_1obs"
+#         ))
+#         return
+
+#     # 3) ≥2 rows → LaTeX + bootstrap‐boxplot
+#     # 3a) point‐estimate table
+#     corr = df.corr().loc['target', cols]
+#     df_corr = corr.to_frame(name=caption)
+#     print(df_corr.to_latex(
+#         float_format="%.3f",
+#         caption=caption,
+#         label=f"tab:{code}_{caption.replace(' ','_')}"
+#     ))
+
+#     # 3b) bootstrap & boxplot
+#     boot = bootstrap_corr_df(df)
+#     # if these were DE_topics, strip off "DE_"; if single EPU, leave name
+#     if cols[0].startswith(code + "_"):
+#         boot.columns = [c.split('_',1)[1] for c in boot.columns]
+#     ax = boot.boxplot(return_type='axes')
+#     ax.set_title(f"{caption} ({code})")
+#     ax.set_ylabel("Pearson $r$")
+#     plt.xticks(rotation=45, ha='right')
+#     plt.tight_layout()
+#     plt.show()
+
+# for country, code in country_map.items():
+#     # … your GDP blocks …
+
+#     # ── Monthly → Inflation ──
+#     # 1) grab the inflation series and name it 'target'
+#     ym = df_inf[country].rename('target')
+
+#     # 2) merge FIGAS & inflation into one DataFrame
+#     df_m = (
+#         monthly_sentiment
+#           .filter(like=f"{code}_")   # all the DE_* topics
+#           .join(ym, how='inner')      # plus the 'target' column
+#           .dropna()
+#     )
+#     print(f"{country} ({code}) monthly shape:", df_m.shape)
+
+#     # 3) now pass df_m directly to run_corr_latex_and_box
+#     #    (using the version that expects a single DF with a 'target' column)
+#     run_corr_latex_and_box(df_m, code, "FIGAS vs Inflation")
+
+#     # 4) do exactly the same for EPU
+#     df_em = (
+#         epu_monthly
+#           .rename(columns={code:'EPU'})
+#           .join(ym, how='inner')
+#           .dropna()
+#     )
+#     run_corr_latex_and_box(df_em, "EPU", "EPU vs Inflation")
+
+#     # 5) and Ashwin
+#     df_am = (
+#         ashwin_monthly_country_sentiment_df
+#           .filter(like=f"{code}_")
+#           .join(ym, how='inner')
+#           .dropna()
+#     )
+#     run_corr_latex_and_box(df_am, code, "Lexica Sentiments vs Inflation")
+    
+# log_gdp_data.rename(columns=country_map, inplace=True)
+# # —— Quarterly → GDP ——
+# for country, code in country_map.items():
+#     # 1) grab the quarterly GDP log‐diff series and name it 'target'
+#     yq = log_gdp_data[code].rename('target')
+
+#     # 2) FIGAS topics vs GDP
+#     df_qf = (
+#         quarterly_sentiment
+#           .filter(like=f"{code}_")   # DE_*, FR_*, etc.
+#           .join(yq, how='inner')      # plus 'target'
+#           .dropna()
+#     )
+#     print(f"{country} ({code}) quarterly FIGAS vs GDP shape:", df_qf.shape)
+#     run_corr_latex_and_box(df_qf, code, "FIGAS vs GDP")
+
+#     # 3) EPU vs GDP
+#     df_qe = (
+#         epu_quarterly
+#           .rename(columns={code: 'EPU'})
+#           .join(yq, how='inner')
+#           .dropna()
+#     )
+#     print(f"{country} ({code}) quarterly EPU vs GDP shape:", df_qe.shape)
+#     run_corr_latex_and_box(df_qe, "EPU", "EPU vs GDP")
+
+#     # 4) Ashwin topics vs GDP
+#     df_qa = (
+#         ashwin_quarterly_country_sentiment_df
+#           .filter(like=f"{code}_")
+#           .join(yq, how='inner')
+#           .dropna()
+#     )
+#     print(f"{country} ({code}) quarterly Ashwin vs GDP shape:", df_qa.shape)
+#     run_corr_latex_and_box(df_qa, code, "Lexica Sentiments vs GDP")
+    
+
 #%% Plot wage time series for each country
 
 '''Plot and seasonally decompose wage series for each country: 
@@ -2166,3 +2462,5 @@ loaded_data = joblib.load(r"C:\Users\oskar\Desktop\Uni\4. Mastersemester\Master 
 globals().update(loaded_data)
 
 print("✅ All variables successfully loaded.")
+
+
